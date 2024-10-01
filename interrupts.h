@@ -1,9 +1,10 @@
 #ifndef INTERRUPTS_H
 #define INTERRUPTS_H
 
+// configurations
 #define MAX_EVENTS 100
 #define VECTOR_TABLE_SIZE 256
-#define DO_LOGGING 1
+#define DEBUG_MODE 1
 
 typedef struct
 {

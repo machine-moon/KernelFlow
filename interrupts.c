@@ -160,36 +160,39 @@ int main(int argc, char *argv[])
     load_vector_table(argv[2], vector_table);
     // Process trace events and generate output
     process_trace(trace, event_count, vector_table, argv[3]);
-    //--------------------------------------------------------------------------------
-    // Print the output trace
-    char choice;
-    printf("Execution trace saved to %s\n", argv[3]);
-    printf("Would you like to print the execution trace? (y/n): ");
-    scanf("%c", &choice);
+    // done
 
-    if ((choice == 'y') || (choice == 'Y'))
+    // log the debug info
+    if (DEBUG_MODE)
     {
-        FILE *file = fopen(argv[3], "r"); // Open file for reading
-        if (!file)
-        {
-            printf("Error: Cannot open file %s\n", argv[3]); // Print error if file can't be opened
-        }
-
-        int i = 0;
-        char line[256];
-        // Read each line from the file and print it
-        while (fgets(line, sizeof(line), file))
-        {
-            printf("Execution Trace Line %d: ", i);
-            printf("%s", line);
-            i++;
-        }
-    }
-    //--------------------------------------------------------------------------------
-    if (DO_LOGGING)
-    {
+        // Print the output trace
         char choice;
-        printf("Would you like to print the trace? (y/n): ");
+        printf("Execution trace saved to %s\n", argv[3]);
+        printf("Would you like to print the execution trace? (y/n): ");
+        scanf("%c", &choice);
+
+        if ((choice == 'y') || (choice == 'Y'))
+        {
+            FILE *file = fopen(argv[3], "r"); // Open file for reading
+            if (!file)
+            {
+                printf("Error: Cannot open file %s\n", argv[3]); // Print error if file can't be opened
+            }
+
+            int i = 0;
+            char line[256];
+            // Read each line from the file and print it
+            while (fgets(line, sizeof(line), file))
+            {
+                printf("Execution Trace Line %d: ", i);
+                printf("%s", line);
+                i++;
+            }
+        }
+
+        printf("Would you like to print the debug info? (y/n): ");
+        while (getchar() != '\n')
+            ;
         scanf("%c", &choice);
 
         if ((choice == 'y') || (choice == 'Y'))
@@ -207,7 +210,7 @@ int main(int argc, char *argv[])
             while (fgets(line, sizeof(line), file))
             {
 
-                printf("Original Trace Line %d: ", i);
+                printf("\nOriginal Trace Line %d: ", i);
                 printf("%s", line);
 
                 printf("Captured in TraceEvent: Type=%s, Duration=%d, Vector=%d\n", trace[i].type, trace[i].duration, trace[i].vector);
