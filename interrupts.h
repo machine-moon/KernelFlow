@@ -17,4 +17,6 @@ void load_trace(const char *filename, TraceEvent *trace, int *event_count);
 void load_vector_table(const char *filename, int *vector_table);
 void process_trace(TraceEvent *trace, int event_count, const int *vector_table, const char *output_filename);
 
+void rand_sys(int x);
+
 #endif // INTERRUPTS_H
