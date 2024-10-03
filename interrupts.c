@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 // Function to load trace events from a file
 void load_trace(const char *filename, TraceEvent *trace, int *event_count)
@@ -103,16 +104,30 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
         }
         else if (strcmp(trace[i].type, "SYSCALL") == 0) // Check if the event is a SYSCALL event
         {
+            // Random values for the SYSCALL event
+            // SYSCALL event times
+            int duration = trace[i].duration;
+            float r1 = (float)rand() / RAND_MAX, r2 = (float)rand() / RAND_MAX, r3 = (float)rand() / RAND_MAX;
+            float total = r1 + r2 + r3;
+            int a = (int)(duration * 0.50 * (r1 / total));
+            int b = (int)(duration * 0.35 * (r2 / total));
+            int c = duration - a - b; // Ensure sum equals duration
+
             fprintf(file, "%d, 1, switch to kernel mode\n", current_time);
             current_time += 1;
-            fprintf(file, "%d, 3, context saved\n", current_time);
-            current_time += 3;
+            int context_time = (rand() % 3) + 1; // random context switch time
+            fprintf(file, "%d, %d, context saved\n", current_time, (context_time));
+            current_time += context_time;
             fprintf(file, "%d, 1, find vector %d in memory position 0x%04X\n", current_time, trace[i].vector, trace[i].vector * 2);
             current_time += 1;
             fprintf(file, "%d, 1, load address 0X%04X into the PC\n", current_time, vector_table[trace[i].vector]);
             current_time += 1;
-            fprintf(file, "%d, %d, SYSCALL: run the ISR\n", current_time, trace[i].duration);
-            current_time += trace[i].duration;
+            fprintf(file, "%d, %d, SYSCALL: run the ISR\n", current_time, a);
+            current_time += a;
+            fprintf(file, "%d, %d, transfer data\n", current_time, b);
+            current_time += b;
+            fprintf(file, "%d, %d, check for errors\n", current_time, c);
+            current_time += c;
             fprintf(file, "%d, 1, IRET\n", current_time);
             current_time += 1;
         }
@@ -149,6 +164,8 @@ int main(int argc, char *argv[])
         printf("Usage: %s <trace_file> <vector_table_file> <output_file>\n", argv[0]);
         return 1;
     }
+    // Seed
+    srand(time(NULL));
 
     TraceEvent trace[MAX_EVENTS];        // Array to hold trace events
     int vector_table[VECTOR_TABLE_SIZE]; // Array to hold vector table
