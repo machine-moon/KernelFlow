@@ -1,5 +1,3 @@
-// interrupts.c - Main file for the interrupt simulator
-
 #include "interrupts.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -105,10 +103,15 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
         else if (strcmp(trace[i].type, "SYSCALL") == 0) // Check if the event is a SYSCALL event
         {
             // Random values for the SYSCALL event
+
             // SYSCALL event times
             int duration = trace[i].duration;
-            float r1 = (float)rand() / RAND_MAX, r2 = (float)rand() / RAND_MAX, r3 = (float)rand() / RAND_MAX;
+            // Generate three random floating-point numbers between 0 and 1
+            float r1 = (float)rand() / RAND_MAX;
+            float r2 = (float)rand() / RAND_MAX;
+            float r3 = (float)rand() / RAND_MAX;
             float total = r1 + r2 + r3;
+            // Calculate the portions of duration scaled by r1/total, r2/total, and then the remainder.
             int a = (int)(duration * 0.50 * (r1 / total));
             int b = (int)(duration * 0.35 * (r2 / total));
             int c = duration - a - b; // Ensure sum equals duration
@@ -179,7 +182,8 @@ int main(int argc, char *argv[])
     process_trace(trace, event_count, vector_table, argv[3]);
     // done
 
-    // log the debug info
+    // debug info
+    // check DEBUG_MODE in interrupts.h :)
     if (DEBUG_MODE)
     {
         // Print the output trace

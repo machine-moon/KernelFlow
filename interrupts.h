@@ -2,9 +2,9 @@
 #define INTERRUPTS_H
 
 // configurations
-#define MAX_EVENTS 100
+#define MAX_EVENTS 300
 #define VECTOR_TABLE_SIZE 256
-#define DEBUG_MODE 1
+#define DEBUG_MODE 0
 
 typedef struct
 {
@@ -16,7 +16,5 @@ typedef struct
 void load_trace(const char *filename, TraceEvent *trace, int *event_count);
 void load_vector_table(const char *filename, int *vector_table);
 void process_trace(TraceEvent *trace, int event_count, const int *vector_table, const char *output_filename);
-
-void rand_sys(int x);
 
 #endif // INTERRUPTS_H

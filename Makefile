@@ -12,10 +12,10 @@ OBJ = interrupts.o
 DEPS = interrupts.h
 
 # Executable name
-TARGET = interrupts
+TARGET = sim
 
 # Default rule (build the program)
-all: $(TARGET)
+all: $(TARGET) test1 test2
 
 # Object file rule (dependencies for object file)
 $(OBJ): $(SRC) $(DEPS)
@@ -25,14 +25,14 @@ $(OBJ): $(SRC) $(DEPS)
 $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJ)
 
-# Test 1: Run the program with trace.txt, vector.txt, and execution.txt
+# Test 1: Run the program with trace1.txt, vector.txt, and execution1.txt
 test1: $(TARGET)
-	./$(TARGET) trace.txt vector.txt execution.txt
+	./$(TARGET) trace1.txt vector.txt execution1.txt
 
 # Test 2: Run the program with different arguments (trace2.txt, vector2.txt, execution2.txt)
 test2: $(TARGET)
-	./$(TARGET) trace2.txt vector2.txt execution2.txt
+	./$(TARGET) trace2.txt vector.txt execution2.txt
 
 # Clean up
 clean:
-	rm -f $(TARGET) $(OBJ)
+	rm -f $(TARGET) $(OBJ) execution1.txt execution2.txt
