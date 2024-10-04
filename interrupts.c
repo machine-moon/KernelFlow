@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdbool.h>
 
 // Function to load trace events from a file
 void load_trace(const char *filename, TraceEvent *trace, int *event_count)
@@ -92,6 +93,7 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
 
     int current_time = 0;
 
+    bool which_syscall = false;
     // Loop through each event in the trace
     for (int i = 0; i < event_count; i++)
     {
@@ -102,18 +104,14 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
         }
         else if (strcmp(trace[i].type, "SYSCALL") == 0) // Check if the event is a SYSCALL event
         {
+
             // Random values for the SYSCALL event
 
             // SYSCALL event times
             int duration = trace[i].duration;
-            // Generate three random floating-point numbers between 0 and 1
-            float r1 = (float)rand() / RAND_MAX;
-            float r2 = (float)rand() / RAND_MAX;
-            float r3 = (float)rand() / RAND_MAX;
-            float total = r1 + r2 + r3;
-            // Calculate the portions of duration scaled by r1/total, r2/total, and then the remainder.
-            int a = (int)(duration * 0.50 * (r1 / total));
-            int b = (int)(duration * 0.35 * (r2 / total));
+            // Generate two random integers between 0 and duration
+            int a = rand() % (duration + 1);
+            int b = rand() % (duration - a + 1);
             int c = duration - a - b; // Ensure sum equals duration
 
             fprintf(file, "%d, 1, switch to kernel mode\n", current_time);
@@ -127,7 +125,16 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             current_time += 1;
             fprintf(file, "%d, %d, SYSCALL: run the ISR\n", current_time, a);
             current_time += a;
-            fprintf(file, "%d, %d, transfer data\n", current_time, b);
+            if (which_syscall)
+            {
+                fprintf(file, "%d, %d, transfer data to display\n", current_time, b);
+            }
+            else
+            {
+                fprintf(file, "%d, %d, transfer data\n", current_time, b);
+            }
+            which_syscall = !which_syscall;
+
             current_time += b;
             fprintf(file, "%d, %d, check for errors\n", current_time, c);
             current_time += c;
