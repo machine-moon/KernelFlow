@@ -15,7 +15,7 @@ DEPS = interrupts.h
 TARGET = sim
 
 # Default rule (build the program)
-all: $(TARGET) test_all
+all: $(TARGET)
 
 # Object file rule (dependencies for object file)
 $(OBJ): $(SRC) $(DEPS)
