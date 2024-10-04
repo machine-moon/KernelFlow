@@ -4,7 +4,7 @@
 // configurations
 #define MAX_EVENTS 300
 #define VECTOR_TABLE_SIZE 256
-#define DEBUG_MODE 0
+#define DEBUG_MODE 0 // used for debugging at the end of main.c
 
 typedef struct
 {

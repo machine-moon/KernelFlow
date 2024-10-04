@@ -39,7 +39,7 @@ void load_trace(const char *filename, TraceEvent *trace, int *event_count)
         }
         else
         {
-            printf("Warning: Line format not recognized: %s", line);
+            printf("Error: Line format not recognized: %s", line);
             continue; // Skip to the end of the loop
         }
 
@@ -74,7 +74,7 @@ void load_vector_table(const char *filename, int *vector_table)
 
         if (!is_success)
         {
-            printf("Warning: Line format not recognized: %s", line); // Debug print for unrecognized format
+            printf("Error: Line format not recognized: %s", line); // Debug print for unrecognized format
         }
     }
     fclose(file); // Close the vector table file
@@ -247,7 +247,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        printf("Goodbye!\n");
+        printf("\n\tGoodbye %s!\n\n", argv[1]);
     }
 
     return 0;
