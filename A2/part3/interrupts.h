@@ -27,10 +27,10 @@ typedef struct
 typedef struct
 {
     unsigned int pid;
-    // unsigned int cpu_time;
-    // unsigned int io_time;
-    // unsigned int remaining_cpu_time;
-    //  unsigned int partition_number;
+    unsigned int cpu_time;
+    unsigned int io_time;
+    unsigned int remaining_cpu_time;
+    unsigned int partition_number;
     struct PCB *prev;
     struct PCB *next;
 } PCB;
