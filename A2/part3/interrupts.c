@@ -4,19 +4,34 @@
 #include <string.h>
 #include <time.h>
 #include <stdbool.h>
+#include <assert.h>
 
 // Function to handle the FORK event
-void handle_fork(FILE *file, int *current_time, int duration, PCB *current_process)
+PCB *handle_fork(FILE *file, int *current_time, int duration, PCB *current_process)
 {
-    PCB *new_process = (PCB *)malloc(sizeof(PCB));                     // Allocate memory for the new process
-    new_process->pid = current_process->pid + 1;                       // Increment the PID of the new process
-    new_process->cpu_time = 0;                                         // Initialize the CPU time of the new process
-    new_process->io_time = 0;                                          // Initialize the IO time of the new process
-    new_process->remaining_cpu_time = 0;                               // Initialize the remaining CPU time of the new process
-    new_process->partition_number = current_process->partition_number; // Set the partition number of the new process
-    new_process->prev = current_process;                               // Set the previous process of the new process to the current process
-    new_process->next = NULL;                                          // Set the next process of the new process to the next process of the current process
-    current_process->next = new_process;                               // Set the next process of the current process to the new process
+    // Create a new PCB for the forked process
+    PCB *new_process = (PCB *)malloc(sizeof(PCB));
+    assert(new_process != NULL);
+
+    // Duplicate the current process into the new process
+    *new_process = *current_process;
+    new_process->pid = current_process->pid + 1;
+
+    new_process->prev = current_process; // ref to parent
+    new_process->next = NULL;
+
+    // Iterate to the end of the linked list
+    PCB *last_process = current_process;
+    while (last_process->next != NULL)
+    {
+        last_process = last_process->next;
+    }
+
+    // Attach the new process to the end of the list
+    last_process->next = new_process;
+
+    // Return the pointer to the new process
+    return new_process;
 }
 
 // Function to handle the EXEC event
@@ -97,10 +112,12 @@ void load_trace(const char *filename, TraceEvent *trace, int *event_count)
         else if (sscanf(line, "FORK, %d", &current_event.duration) == 1)
         {
             strcpy(current_event.type, "FORK");
+            current_event.vector = 2; // Default vector to 2
         }
         else if (sscanf(line, "EXEC %s, %d", current_event.program_name, &current_event.duration) == 2)
         {
             strcpy(current_event.type, "EXEC");
+            current_event.vector = 3; // Default vector to 3
         }
         else
         {
@@ -223,11 +240,29 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
         }
         else if (strcmp(trace[i].type, "FORK") == 0) // Check if the event is a FORK event
         {
-            handle_fork(file, &current_time, trace[i].duration, current_process);
+            // Random values for FORK events THAT match the duration of the event.
+            int duration = trace[i].duration;
+            int a = rand() % (duration + 1); // for copy parent PCB to child PCB
+            int b = duration - a;            // for scheduler called
+
+            fprintf(file, "%d, 1, switch to kernel mode\n", current_time);
+            current_time += 1;
+            fprintf(file, "%d, 3, context saved\n", current_time);
+            current_time += 3;
+            fprintf(file, "%d, 1, find vector %d in memory position 0x%04X\n", current_time, trace[i].vector, trace[i].vector * 2);
+            current_time += 1;
+            fprintf(file, "%d, 1, load address 0X%04X into the PC\n", current_time, vector_table[trace[i].vector]);
+            current_time += 1;
+            fprintf(file, "%d, %d, FORK: copy parent PCB to child PCB\n", current_time, a);
+            current_time += a;
+            fprintf(file, "%d, %d, scheduler called\n", current_time, b);
+            current_time += b;
+            fprintf(file, "%d, 1, IRET\n", current_time);
+            current_time += 1;
+            current_process = handle_fork(file, &current_time, trace[i].duration, current_process);
         }
         else if (strcmp(trace[i].type, "EXEC") == 0) // Check if the event is an EXEC event
         {
-            handle_exec(file, &current_time, trace[i].duration, trace[i].program_name, external_files, external_file_count, partitions, pcb_table, current_process);
         }
 
     fclose(file);
