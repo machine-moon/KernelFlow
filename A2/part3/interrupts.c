@@ -263,6 +263,83 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
         }
         else if (strcmp(trace[i].type, "EXEC") == 0) // Check if the event is an EXEC event
         {
+            // Random values for EXEC events THAT match the duration of the event.
+            int duration = trace[i].duration;
+            int a = rand() % (duration + 1);         // load program into memory
+            int b = rand() % (duration - a + 1);     // find partition
+            int c = rand() % (duration - a - b + 1); // mark partition as occupied
+            int d = duration - a - b - c;            // update PCB with new information
+
+            // Search for the file in the external files list
+            int file_size = -1;
+            for (int j = 0; j < external_file_count; j++)
+            {
+                if (strcmp(external_files[j].program_name, program_name) == 0)
+                {
+                    file_size = external_files[j].size;
+                    break;
+                }
+            }
+
+            if (file_size == -1)
+            {
+                fprintf(file, "Error: Program %s not found in external files\n", program_name);
+                return;
+            }
+            // a.
+            fprintf(file, "%d, 1, switch to kernel mode\n", current_time);
+            current_time += 1;
+            int context_time = (rand() % 3) + 1; // random context switch time (1-3)
+            fprintf(file, "%d, %d, context saved\n", current_time, context_time);
+            current_time += context_time;
+            fprintf(file, "%d, 1, find vector %d in memory position 0x%04X\n", current_time, trace[i].vector, trace[i].vector * 2);
+            current_time += 1;
+            fprintf(file, "%d, 1, load address 0X%04X into the PC\n", current_time, vector_table[trace[i].vector]);
+            current_time += 1;
+            fprintf(file, "%d, %d, EXEC: load %s of size %dMb\n", current_time, a, program_name, file_size);
+            current_time += a;
+
+            // Find the best-fit partition
+            MemoryPartition *best_fit = NULL;
+            for (int j = 0; j < sizeof(partitions) / sizeof(partitions[0]); j++)
+            {
+                if (strcmp(partitions[j].code, "free") == 0 && partitions[j].size >= file_size)
+                {
+                    if (best_fit == NULL || partitions[j].size < best_fit->size)
+                    {
+                        best_fit = &partitions[j];
+                    }
+                }
+            }
+
+            if (best_fit == NULL)
+            {
+                fprintf(file, "Error: No suitable partition found for program %s\n", program_name);
+                return;
+            }
+
+            // Mark the partition as occupied
+            fprintf(file, "%d, %d, found partition %d with %dMb of space\n", current_time, b, best_fit->partition_number, best_fit->size);
+            current_time += b;
+            strcpy(best_fit->code, program_name);
+
+            // Update the PCB with the new information
+            fprintf(file, "%d, %d, partition %d marked as occupied\n", current_time, c, best_fit->partition_number);
+            current_time += c;
+            current_process->partition_number = best_fit->partition_number;
+
+            // Call the scheduler
+            fprintf(file, "%d, %d, updating PCB with new information\n", current_time, d);
+            current_time += d;
+            fprintf(file, "%d, 1, scheduler called\n", current_time);
+            current_time += 1;
+
+            // Return from the ISR
+            fprintf(file, "%d, 1, IRET\n", current_time);
+            current_time += 1;
+
+            // Handle the EXEC event by loading the new trace events and parsing
+            handle_exec(file, &current_time, trace[i].program_name, external_files, external_file_count, partitions, pcb_table, current_process);
         }
 
     fclose(file);
