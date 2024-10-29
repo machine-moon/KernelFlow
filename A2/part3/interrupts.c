@@ -6,37 +6,131 @@
 #include <stdbool.h>
 #include <assert.h>
 
-// Function to handle the FORK event
-PCB *handle_fork(FILE *file, int *current_time, int duration, PCB *current_process)
+// function to handle the fork event
+void run_fork(FILE *file, int *current_time, int duration, PCB **current_process)
 {
-    // Create a new PCB for the forked process
+    if (file != NULL) // FIX LATER, THIS IS A TEMPORARY FIX
+    {
+        // we need file, current_time, duration here.
+        fprintf(file, "%d, 1, switch to kernel mode\n", *current_time);
+        (*current_time) += 1;
+        fprintf(file, "%d, 3, context saved\n", *current_time);
+        (*current_time) += 3;
+        fprintf(file, "%d, 1, find vector 2 in memory position 0x%04X\n", *current_time, 2 * 2);
+        (*current_time) += 1;
+        fprintf(file, "%d, 1, load address 0X%04X into the PC\n", *current_time, 0x0000);
+        (*current_time) += 1;
+        fprintf(file, "%d, %d, FORK: copy parent PCB to child PCB\n", *current_time, duration);
+        (*current_time) += duration;
+        fprintf(file, "%d, 1, scheduler called\n", *current_time);
+        (*current_time) += 1;
+        fprintf(file, "%d, 1, IRET\n", *current_time);
+        (*current_time) += 1;
+    }
+
     PCB *new_process = (PCB *)malloc(sizeof(PCB));
     assert(new_process != NULL);
 
-    // Duplicate the current process into the new process
-    *new_process = *current_process;
-    new_process->pid = current_process->pid + 1;
+    *new_process = **current_process; // copy the content of the current process to the new process
 
-    new_process->prev = current_process; // ref to parent
+    new_process->pid = (*current_process)->pid + 1;
+
+    new_process->parent = *current_process;
     new_process->next = NULL;
 
-    // Iterate to the end of the linked list
-    PCB *last_process = current_process;
+    PCB *last_process = *current_process;
     while (last_process->next != NULL)
     {
         last_process = last_process->next;
     }
 
-    // Attach the new process to the end of the list
     last_process->next = new_process;
 
-    // Return the pointer to the new process
-    return new_process;
+    *current_process = new_process;
 }
 
-// Function to handle the EXEC event
-void handle_exec(FILE *file, int *current_time, int duration, char *program_name, ExternalFile *external_files, int external_file_count, MemoryPartition *partitions, PCB *pcb_table, PCB *current_process)
+// function to handle the exec event
+void run_exec(const char *program_name, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, int *current_time, int duration)
 {
+    // Check if the current process is not the init process
+    if (strcmp((*current_process)->program_name, "init") != 0)
+    {
+        // 1. Find the size of the program from the external files
+        int program_size = -1;
+        for (int i = 0; i < external_file_count; i++)
+        {
+            if (strcmp(external_files[i].program_name, program_name) == 0)
+            {
+                program_size = external_files[i].size;
+                break;
+            }
+        }
+
+        if (program_size == -1)
+        {
+            printf("Error: Program %s not found in external files\n", program_name);
+            return;
+        }
+
+        // 2. Find the best fit memory partition for the program
+        MemoryPartition *best_fit_partition = NULL;
+        for (int i = 0; i < sizeof(memory_partitions) / sizeof(memory_partitions[0]); i++)
+        {
+            if (strcmp(memory_partitions[i].code, "free") == 0 && memory_partitions[i].size >= program_size)
+            {
+                if (best_fit_partition == NULL || memory_partitions[i].size < best_fit_partition->size)
+                {
+                    best_fit_partition = &memory_partitions[i];
+                }
+            }
+        }
+
+        if (best_fit_partition == NULL)
+        {
+            printf("Error: No suitable partition found for program %s\n", program_name);
+            return;
+        }
+
+        // 3. Mark the partition as occupied with the program name
+        strcpy(best_fit_partition->code, program_name);
+        // 4. Update the PCB with the new information
+        (*current_process)->partition_number = best_fit_partition->partition_number;
+        strcpy((*current_process)->program_name, program_name);
+        (*current_process)->program_size = program_size;
+
+        // FPRINTING TO FILE TODO
+    }
+
+    // 5. Load the trace file for the program
+    TraceEvent trace_events[MAX_EVENTS];
+    int event_count = 0;
+    load_trace(program_name, trace_events, &event_count);
+
+    // 6. Call process_trace to run the process
+    process_trace(trace_events, event_count, vector_table, output_filename, external_files, external_file_count, memory_partitions, *current_process);
+}
+// Function to handle the system status
+void save_system_status(int current_time, PCB *pcb_table)
+{
+    FILE *status_file = fopen("system_status.txt", "w");
+    if (!status_file)
+    {
+        printf("Error: Cannot open system_status.txt for writing\n");
+        return;
+    }
+
+    fprintf(status_file, "Current simulated time: %d\n", current_time);
+    fprintf(status_file, "PCB Table:\n");
+    fprintf(status_file, "PID | Program Name | Partition | Size\n");
+
+    PCB *current = pcb_table;
+    while (current != NULL)
+    {
+        fprintf(status_file, "%d | %s | %d | %d\n", current->pid, current->program_name, current->partition_number, current->program_size);
+        current = current->next;
+    }
+
+    fclose(status_file);
 }
 
 // Declaration of the load_external_files function
@@ -112,12 +206,12 @@ void load_trace(const char *filename, TraceEvent *trace, int *event_count)
         else if (sscanf(line, "FORK, %d", &current_event.duration) == 1)
         {
             strcpy(current_event.type, "FORK");
-            current_event.vector = 2; // Default vector to 2
+            current_event.vector = 2; // default vector is 2
         }
         else if (sscanf(line, "EXEC %s, %d", current_event.program_name, &current_event.duration) == 2)
         {
             strcpy(current_event.type, "EXEC");
-            current_event.vector = 3; // Default vector to 3
+            current_event.vector = 3; // default vector is 3
         }
         else
         {
@@ -218,6 +312,8 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             current_time += c;
             fprintf(file, "%d, 1, IRET\n", current_time);
             current_time += 1;
+
+            save_system_status(current_time, pcb_table);
         }
         else if (strcmp(trace[i].type, "END_IO") == 0) // Check if the event is an END_IO event
         {
@@ -237,6 +333,8 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             current_time += trace[i].duration;
             fprintf(file, "%d, 1, IRET\n", current_time);
             current_time += 1;
+
+            save_system_status(current_time, pcb_table);
         }
         else if (strcmp(trace[i].type, "FORK") == 0) // Check if the event is a FORK event
         {
@@ -259,7 +357,10 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             current_time += b;
             fprintf(file, "%d, 1, IRET\n", current_time);
             current_time += 1;
-            current_process = handle_fork(file, &current_time, trace[i].duration, current_process);
+
+            run_fork(file, &current_time, trace[i].duration, &current_process);
+
+            save_system_status(current_time, pcb_table);
         }
         else if (strcmp(trace[i].type, "EXEC") == 0) // Check if the event is an EXEC event
         {
@@ -339,11 +440,28 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             current_time += 1;
 
             // Handle the EXEC event by loading the new trace events and parsing
-            handle_exec(file, &current_time, trace[i].program_name, external_files, external_file_count, partitions, pcb_table, current_process);
+            run_exec(file, &current_time, trace[i].program_name, external_files, external_file_count, partitions, pcb_table, &current_process);
+
+            save_system_status(current_time, pcb_table);
         }
 
     fclose(file);
 }
+
+// Function to initialize a PCB
+PCB *init_pcb(PCB *pcb)
+{
+    pcb->pid = -1; // because we will fork and the init process will have a pid of 0
+    pcb->cpu_time = 0;
+    pcb->io_time = 0;
+    pcb->remaining_cpu_time = 0;
+    pcb->partition_number = 6;
+    strcpy(pcb->program_name, "init");
+    pcb->program_size = 1;
+    pcb->parent = NULL;
+    pcb->next = NULL;
+}
+
 // Main function to handle command-line arguments and call the appropriate functions
 int main(int argc, char *argv[])
 {
@@ -364,9 +482,10 @@ int main(int argc, char *argv[])
     // -----------------------------------------------------------
 
     // Load trace events
-    TraceEvent trace[MAX_EVENTS];
-    int event_count = 0;
-    load_trace(argv[1], trace, &event_count);
+    // TraceEvent trace[MAX_EVENTS];
+    // int event_count = 0;
+    // load_trace(argv[1], trace, &event_count);
+
     // Load external files
     ExternalFile external_files[MAX_EXTERNAL_FILES];
     int external_file_count = 0;
@@ -385,25 +504,17 @@ int main(int argc, char *argv[])
 
     // Initialize PCB doubly linked list with the init process
     PCB pcb_table;
-    pcb_table.pid = 0;
-    pcb_table.cpu_time = 0;
-    pcb_table.io_time = 0;
-    pcb_table.remaining_cpu_time = 0;
-    pcb_table.partition_number = 6;
-    pcb_table.prev = NULL;
-    pcb_table.next = NULL;
-
-    PCB *current_process = &pcb_table;
+    PCB *current_process = init_pcb(&pcb_table);
 
     // -----------------------------------------------------------
     // Simulation Section
     // -----------------------------------------------------------
+    // process_trace(trace, event_count, vector_table, argv[4], external_files, external_file_count, partitions, pcb_table);
 
-    // Run the first FORK event on the init process
-    handle_fork(NULL, NULL, 0, current_process);
+    run_fork(NULL, NULL, 0, &current_process);
+    int current_time = 0;
 
-    // Run the first EXEC event on the trace file
-    handle_exec(NULL, NULL, 0, "trace.txt", external_files, external_file_count, partitions, pcb_table, current_process);
+    run_exec(argv[1], vector_table, argv[4], external_files, external_file_count, partitions, &current_process, &current_time, 0);
 
     // done
 
