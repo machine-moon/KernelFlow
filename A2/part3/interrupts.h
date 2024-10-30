@@ -5,11 +5,14 @@
 #define MAX_EVENTS 300
 #define MAX_PARTITIONS 6
 #define MAX_EXTERNAL_FILES 100
-
 #define VECTOR_TABLE_SIZE 256
 #define DEBUG_MODE 0 // used for debugging at the end of main.c
-#include <stdio.h>   // for FILE
-#include <stdint.h>  // for uint16_t
+
+// includes
+#include <stdio.h>  // for FILE
+#include <stdint.h> // for int types
+
+// structs
 
 typedef struct
 {
@@ -26,7 +29,6 @@ typedef struct
     char code[20]; // "free", "init", or program name
 } MemoryPartition;
 
-// struct PCB;
 typedef struct PCB
 {
     uint16_t pid;
@@ -46,11 +48,12 @@ typedef struct
     uint16_t size;
 } ExternalFile;
 // -----------------------------------------------------------
-void run_fork(FILE *file, uint16_t *current_time, int duration, PCB **current_process);
-void run_exec(const char *program_name, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time, int duration);
+void run_fork(PCB **current_process);
+void run_exec(const char *program_name, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time);
 // -----------------------------------------------------------
 
 PCB *init_pcb(PCB *pcb);
+void free_pcb_list(PCB *pcb_table);
 
 void save_system_status(uint16_t current_time, PCB *pcb_table);
 

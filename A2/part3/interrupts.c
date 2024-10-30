@@ -17,33 +17,16 @@
 // uint16_t instead of unsigned short int
 // fix global_time and current_time in process_trace
 // var renames e.g memory_partitions to partitions/main memory / data structures
+// STUDENT NUMBERS ON FILES
+// go over local vars and functions vars types (int, uint16_t, etc) and names
 
 // function to handle the fork event
-void run_fork(FILE *file, uint16_t *current_time, int duration, PCB **current_process)
+void run_fork(PCB **current_process)
 {
-    /*if (file != NULL)         // do we even need this? handle in process_trace
-    {
-        // we need file, current_time, duration here.
-        fprintf(file, "%d, 1, switch to kernel mode\n", *current_time);
-        (*current_time) += 1;
-        fprintf(file, "%d, 3, context saved\n", *current_time);
-        (*current_time) += 3;
-        fprintf(file, "%d, 1, find vector 2 in memory position 0x%04X\n", *current_time, (unsigned int)(2 * 2));
-        (*current_time) += 1;
-        fprintf(file, "%d, 1, load address 0X%04X into the PC\n", *current_time,);
-        (*current_time) += 1;
-        fprintf(file, "%d, %d, FORK: copy parent PCB to child PCB\n", *current_time, duration);
-        (*current_time) += duration;
-        fprintf(file, "%d, 1, scheduler called\n", *current_time);
-        (*current_time) += 1;
-        fprintf(file, "%d, 1, IRET\n", *current_time);
-        (*current_time) += 1;
-    }*/
-
     PCB *new_process = (PCB *)malloc(sizeof(PCB));
     assert(new_process != NULL);
 
-    memcpy(new_process, *current_process, sizeof(PCB)); // copy the content of the current process to the new process
+    memcpy(new_process, *current_process, sizeof(PCB)); // duplicate the current process
 
     new_process->pid = (*current_process)->pid + 1;
 
@@ -62,13 +45,13 @@ void run_fork(FILE *file, uint16_t *current_time, int duration, PCB **current_pr
 }
 
 // function to handle the exec event
-void run_exec(const char *program_name, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time, int duration)
+void run_exec(const char *program_name, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time)
 {
-    // Check if the current process is not the init process
-    if (strcmp((*current_process)->program_name, "init") != 0)
+    int program_size = -1;
+    // Check if the current process is not the FIRST call to exec() (init process)
+    if ((*current_process)->pid != 0)
     {
         // 1. Find the size of the program from the external files
-        int program_size = -1;
         for (int i = 0; i < external_file_count; i++)
         {
             if (strcmp(external_files[i].program_name, program_name) == 0)
@@ -83,35 +66,42 @@ void run_exec(const char *program_name, const int *vector_table, const char *out
             printf("Error: Program %s not found in external files\n", program_name);
             return;
         }
+    }
+    else
+    {
+        program_size = 1; // init process size is 1
+    }
 
-        // 2. Find the best fit memory partition for the program
-        MemoryPartition *best_fit_partition = NULL;
-        for (int i = 0; i < MAX_PARTITIONS; i++)
+    // 2. Find the best fit memory partition for the program
+    // best fit algorithm searches the entire memory partitions array for the best fit.
+    MemoryPartition *candidate_partition = NULL;
+    for (int i = 0; i < MAX_PARTITIONS; i++)
+    {
+        if (strcmp(memory_partitions[i].code, "free") == 0 && memory_partitions[i].size >= program_size)
         {
-            if (strcmp(memory_partitions[i].code, "free") == 0 && memory_partitions[i].size >= program_size)
+            if (candidate_partition == NULL || memory_partitions[i].size < candidate_partition->size)
             {
-                if (best_fit_partition == NULL || memory_partitions[i].size < best_fit_partition->size)
-                {
-                    best_fit_partition = &memory_partitions[i];
-                }
+                candidate_partition = &memory_partitions[i];
             }
         }
-
-        if (best_fit_partition == NULL)
-        {
-            printf("Error: No suitable partition found for program %s\n", program_name);
-            return;
-        }
-
-        // 3. Mark the partition as occupied with the program name
-        strcpy(best_fit_partition->code, program_name);
-        // 4. Update the PCB with the new information
-        (*current_process)->partition_number = best_fit_partition->partition_number;
-        strcpy((*current_process)->program_name, program_name);
-        (*current_process)->program_size = program_size;
-
-        // FPRINTING TO FILE TODO
     }
+    // Check if a suitable partition was found
+    if (candidate_partition == NULL)
+    {
+        printf("Error: No suitable partition found for program %s\n", program_name);
+        return;
+    }
+
+    // 3. Mark the partition as occupied with the program name
+    strcpy(candidate_partition->code, program_name);
+    // 4. Update the PCB with the new information
+    (*current_process)->partition_number = candidate_partition->partition_number;
+    strcpy((*current_process)->program_name, program_name);
+    (*current_process)->program_size = program_size;
+
+    // FPRINTING TO FILE TODO
+
+    // DEBUG
 
     // 5. Load the trace file for the program
     TraceEvent trace_events[MAX_EVENTS];
@@ -132,7 +122,7 @@ void save_system_status(uint16_t current_time, PCB *pcb_table)
         return;
     }
 
-    fprintf(status_file, "Current simulated time: %d\n", current_time);
+    fprintf(status_file, "Current simulated time: %hu\n", current_time);
     fprintf(status_file, "PCB Table:\n");
     fprintf(status_file, "PID | Program Name | Partition | Size\n");
 
@@ -270,32 +260,31 @@ void load_vector_table(const char *filename, int *vector_table)
 }
 
 // Function to process the trace and log the events
-void process_trace(TraceEvent *trace, int event_count, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *partitions, PCB *current_process, uint16_t *global_time)
+void process_trace(TraceEvent *trace, int event_count, const int *vector_table, FILE *file, ExternalFile *external_files, int external_file_count, MemoryPartition *partitions, PCB *current_process, uint16_t *current_time)
 {
+    if (!file)
+    {
+        printf("Error: Cannot open output file\n");
+        exit(1);
+    }
     PCB *pcb_table = current_process;
     // iterare through the current process's parent to get the pcb table
     while (pcb_table->parent != NULL && strcmp(pcb_table->program_name, "init") != 0)
     {
         pcb_table = pcb_table->parent;
     }
-    FILE *file = fopen(output_filename, "w");
-    if (!file)
-    {
-        printf("Error: Cannot open output file %s\n", output_filename);
-        exit(1);
-    }
+    
 
     // MemoryPartition *current_partition = partitions; for exec
 
-    uint16_t current_time = *global_time;
-    bool which_syscall = false; // Used to alternate between the two SYSCALL events
+    bool which_syscall = false; // Used to alternate between the two SYSCALL events (display and transfer data)
 
     // Loop through each event in the trace
     for (int i = 0; i < event_count; i++)
         if (strcmp(trace[i].type, "CPU") == 0) // Check if the event is a CPU event
         {
-            fprintf(file, "%d, %d, CPU execution\n", current_time, trace[i].duration);
-            current_time += trace[i].duration;
+            fprintf(file, "%d, %d, CPU execution\n", *current_time, trace[i].duration);
+            *current_time += trace[i].duration;
         }
         else if (strcmp(trace[i].type, "SYSCALL") == 0) // Check if the event is a SYSCALL event
         {
@@ -305,170 +294,123 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             int b = rand() % (duration - a + 1); // for transfer data
             int c = duration - a - b;            // check for errors
 
-            fprintf(file, "%d, 1, switch to kernel mode\n", current_time);
-            current_time += 1;
+            fprintf(file, "%d, 1, switch to kernel mode\n", *current_time);
+            *current_time += 1;
             int context_time = (rand() % 3) + 1; // random context switch time (1-3)
-            fprintf(file, "%d, %d, context saved\n", current_time, context_time);
-            current_time += context_time;
-            fprintf(file, "%d, 1, find vector %d in memory position 0x%04X\n", current_time, trace[i].vector, trace[i].vector * 2);
-            current_time += 1;
-            fprintf(file, "%d, 1, load address 0X%04X into the PC\n", current_time, vector_table[trace[i].vector]);
-            current_time += 1;
-            fprintf(file, "%d, %d, SYSCALL: run the ISR\n", current_time, a);
-            current_time += a;
+            fprintf(file, "%d, %d, context saved\n", *current_time, context_time);
+            *current_time += context_time;
+            fprintf(file, "%d, 1, find vector %d in memory position 0x%04X\n", *current_time, trace[i].vector, trace[i].vector * 2);
+            *current_time += 1;
+            fprintf(file, "%d, 1, load address 0X%04X into the PC\n", *current_time, vector_table[trace[i].vector]);
+            *current_time += 1;
+            fprintf(file, "%d, %d, SYSCALL: run the ISR\n", *current_time, a);
+            *current_time += a;
             if (which_syscall)
             {
-                fprintf(file, "%d, %d, transfer data to display\n", current_time, b);
+                fprintf(file, "%d, %d, transfer data to display\n", *current_time, b);
             }
             else
             {
-                fprintf(file, "%d, %d, transfer data\n", current_time, b);
+                fprintf(file, "%d, %d, transfer data\n", *current_time, b);
             }
             which_syscall = !which_syscall;
 
-            current_time += b;
-            fprintf(file, "%d, %d, check for errors\n", current_time, c);
-            current_time += c;
-            fprintf(file, "%d, 1, IRET\n", current_time);
-            current_time += 1;
+            *current_time += b;
+            fprintf(file, "%d, %d, check for errors\n", *current_time, c);
+            *current_time += c;
+            fprintf(file, "%d, 1, IRET\n", *current_time);
+            *current_time += 1;
 
-            save_system_status(current_time, pcb_table);
+            save_system_status(*current_time, pcb_table);
         }
         else if (strcmp(trace[i].type, "END_IO") == 0) // Check if the event is an END_IO event
         {
-            fprintf(file, "%d, 1, check priority of interrupt\n", current_time);
-            current_time += 1;
-            fprintf(file, "%d, 1, check if masked\n", current_time);
-            current_time += 1;
-            fprintf(file, "%d, 1, switch to kernel mode\n", current_time);
-            current_time += 1;
-            fprintf(file, "%d, 3, context saved\n", current_time);
-            current_time += 3;
-            fprintf(file, "%d, 1, find vector %d in memory position 0x%04X\n", current_time, trace[i].vector, trace[i].vector * 2);
-            current_time += 1;
-            fprintf(file, "%d, 1, load address 0X%04X into the PC\n", current_time, vector_table[trace[i].vector]);
-            current_time += 1;
-            fprintf(file, "%d, %d, END_IO\n", current_time, trace[i].duration);
-            current_time += trace[i].duration;
-            fprintf(file, "%d, 1, IRET\n", current_time);
-            current_time += 1;
+            fprintf(file, "%d, 1, check priority of interrupt\n", *current_time);
+            *current_time += 1;
+            fprintf(file, "%d, 1, check if masked\n", *current_time);
+            *current_time += 1;
+            fprintf(file, "%d, 1, switch to kernel mode\n", *current_time);
+            *current_time += 1;
+            fprintf(file, "%d, 3, context saved\n", *current_time);
+            *current_time += 3;
+            fprintf(file, "%d, 1, find vector %d in memory position 0x%04X\n", *current_time, trace[i].vector, trace[i].vector * 2);
+            *current_time += 1;
+            fprintf(file, "%d, 1, load address 0X%04X into the PC\n", *current_time, vector_table[trace[i].vector]);
+            *current_time += 1;
+            fprintf(file, "%d, %d, END_IO\n", *current_time, trace[i].duration);
+            *current_time += trace[i].duration;
+            fprintf(file, "%d, 1, IRET\n", *current_time);
+            *current_time += 1;
 
-            save_system_status(current_time, pcb_table);
+            save_system_status(*current_time, pcb_table);
         }
         else if (strcmp(trace[i].type, "FORK") == 0) // Check if the event is a FORK event
         {
-            // Random values for FORK events THAT match the duration of the event.
+            // "Random" values for FORK events THAT match the duration of the event.
             int duration = trace[i].duration;
             int a = rand() % (duration + 1); // for copy parent PCB to child PCB
             int b = duration - a;            // for scheduler called
 
-            fprintf(file, "%d, 1, switch to kernel mode\n", current_time);
-            current_time += 1;
-            fprintf(file, "%d, 3, context saved\n", current_time);
-            current_time += 3;
-            fprintf(file, "%d, 1, find vector %d in memory position 0x%04X\n", current_time, trace[i].vector, trace[i].vector * 2);
-            current_time += 1;
-            fprintf(file, "%d, 1, load address 0X%04X into the PC\n", current_time, vector_table[trace[i].vector]);
-            current_time += 1;
-            fprintf(file, "%d, %d, FORK: copy parent PCB to child PCB\n", current_time, a);
-            current_time += a;
-            fprintf(file, "%d, %d, scheduler called\n", current_time, b);
-            current_time += b;
-            fprintf(file, "%d, 1, IRET\n", current_time);
-            current_time += 1;
+            fprintf(file, "%d, 1, switch to kernel mode\n", *current_time);
+            *current_time += 1;
+            fprintf(file, "%d, 3, context saved\n", *current_time);
+            *current_time += 3;
+            fprintf(file, "%d, 1, find vector %d in memory position 0x%04X\n", *current_time, trace[i].vector, trace[i].vector * 2);
+            *current_time += 1;
+            fprintf(file, "%d, 1, load address 0X%04X into the PC\n", *current_time, vector_table[trace[i].vector]);
+            *current_time += 1;
+            fprintf(file, "%d, %d, FORK: copy parent PCB to child PCB\n", *current_time, a);
+            *current_time += a;
+            fprintf(file, "%d, %d, scheduler called\n", *current_time, b);
+            *current_time += b;
+            fprintf(file, "%d, 1, IRET\n", *current_time);
+            *current_time += 1;
 
-            run_fork(file, &current_time, trace[i].duration, &current_process);
-
-            save_system_status(current_time, pcb_table);
+            run_fork(&current_process);
+            save_system_status(*current_time, pcb_table);
         }
         else if (strcmp(trace[i].type, "EXEC") == 0) // Check if the event is an EXEC event
         {
-            /*
-           // Random values for EXEC events THAT match the duration of the event.
-           int duration = trace[i].duration;
-           int a = rand() % (duration + 1);         // load program into memory
-           int b = rand() % (duration - a + 1);     // find partition
-           int c = rand() % (duration - a - b + 1); // mark partition as occupied
-           int d = duration - a - b - c;            // update PCB with new information
+            run_exec(trace[i].program_name, vector_table, output_filename, external_files, external_file_count, partitions, &current_process, current_time);
 
-           // Search for the file in the external files list
-           int file_size = -1;
-           for (int j = 0; j < external_file_count; j++)
-           {
-               if (strcmp(external_files[j].program_name, program_name) == 0)
-               {
-                   file_size = external_files[j].size;
-                   break;
-               }
-           }
+            // Random values for EXEC events THAT match the duration of the event.
+            int duration = trace[i].duration;
+            int a = rand() % (duration + 1);         // load program into memory
+            int b = rand() % (duration - a + 1);     // find partition
+            int c = rand() % (duration - a - b + 1); // mark partition as occupied
+            int d = duration - a - b - c;            // update PCB with new information
 
-           if (file_size == -1)
-           {
-               fprintf(file, "Error: Program %s not found in external files\n", program_name);
-               return;
-           }
+            fprintf(file, "%hu, 1, switch to kernel mode\n", *current_time);
+            *current_time += 1;
+            uint8_t context_time = (rand() % 3) + 1; // random context switch time (1-3)
+            fprintf(file, "%hu, %u, context saved\n", *current_time, context_time);
+            *current_time += context_time;
+            fprintf(file, "%hu, 1, find vector %d in memory position 0x%04X\n", *current_time, trace[i].vector, trace[i].vector * 2);
+            *current_time += 1;
+            fprintf(file, "%hu, 1, load address 0X%04X into the PC\n", *current_time, vector_table[trace[i].vector]);
+            *current_time += 1;
 
-           // a.
-           fprintf(file, "%d, 1, switch to kernel mode\n", current_time);
-           current_time += 1;
-           int context_time = (rand() % 3) + 1; // random context switch time (1-3)
-           fprintf(file, "%d, %d, context saved\n", current_time, context_time);
-           current_time += context_time;
-           fprintf(file, "%d, 1, find vector %d in memory position 0x%04X\n", current_time, trace[i].vector, trace[i].vector * 2);
-           current_time += 1;
-           fprintf(file, "%d, 1, load address 0X%04X into the PC\n", current_time, vector_table[trace[i].vector]);
-           current_time += 1;
-           fprintf(file, "%d, %d, EXEC: load %s of size %dMb\n", current_time, a, program_name, file_size);
-           current_time += a;
+            // Load the program into memory
+            fprintf(file, "%hu, %d, EXEC: load %s of size %dMb\n", *current_time, a, trace[i].program_name, current_process->program_size);
+            *current_time += a;
+            // Find the best fit partition for the program
+            fprintf(file, "%hu, %d, found partition %hu with %huMb of space\n", *current_time, b, current_process->partition_number, current_process->program_size);
+            *current_time += b;
+            // Update the PCB with the new information
+            fprintf(file, "%hu, %d, partition %hu marked as occupied\n", *current_time, c, current_process->partition_number);
+            *current_time += c;
 
-           // Find the best-fit partition
-           MemoryPartition *best_fit = NULL;
-           for (int j = 0; j < sizeof(partitions) / sizeof(partitions[0]); j++)
-           {
-               if (strcmp(partitions[j].code, "free") == 0 && partitions[j].size >= file_size)
-               {
-                   if (best_fit == NULL || partitions[j].size < best_fit->size)
-                   {
-                       best_fit = &partitions[j];
-                   }
-               }
-           }
+            fprintf(file, "%hu, %d, updating PCB with new information\n", *current_time, d);
+            *current_time += d;
 
-           if (best_fit == NULL)
-           {
-               fprintf(file, "Error: No suitable partition found for program %s\n", program_name);
-               return;
-           }
+            fprintf(file, "%hu, 1, scheduler called\n", *current_time);
+            *current_time += 1;
+            fprintf(file, "%hu, 1, IRET\n", *current_time);
+            *current_time += 1;
 
-           // Mark the partition as occupied
-           fprintf(file, "%d, %d, found partition %d with %dMb of space\n", current_time, b, best_fit->partition_number, best_fit->size);
-           current_time += b;
-           strcpy(best_fit->code, program_name);
-
-           // Update the PCB with the new information
-           fprintf(file, "%d, %d, partition %d marked as occupied\n", current_time, c, best_fit->partition_number);
-           current_time += c;
-           current_process->partition_number = best_fit->partition_number;
-
-           // Call the scheduler
-           fprintf(file, "%d, %d, updating PCB with new information\n", current_time, d);
-           current_time += d;
-           fprintf(file, "%d, 1, scheduler called\n", current_time);
-           current_time += 1;
-
-           // Return from the ISR
-           fprintf(file, "%d, 1, IRET\n", current_time);
-           current_time += 1;
-
-           // Handle the EXEC event by loading the new trace events and parsing
-           run_exec(file, &current_time, trace[i].program_name, external_files, external_file_count, partitions, pcb_table, &current_process);
-           */
-            save_system_status(current_time, pcb_table);
+            save_system_status(*current_time, pcb_table);
         }
 
-    // update the current time
-    *global_time = current_time;
-    fclose(file);
 }
 
 // Function to initialize a PCB
@@ -478,12 +420,25 @@ PCB *init_pcb(PCB *pcb)
     pcb->cpu_time = 0;
     pcb->io_time = 0;
     pcb->remaining_cpu_time = 0;
-    pcb->partition_number = 6;
+    pcb->partition_number = 0; // exec() will assign to partition 6
     strcpy(pcb->program_name, "init");
     pcb->program_size = 1;
     pcb->parent = NULL;
     pcb->next = NULL;
     return pcb;
+}
+
+// Function to free the PCB linked list
+void free_pcb_list(PCB *pcb_table)
+{
+    PCB *temp;
+    PCB *current = pcb_table;
+    while (current != NULL)
+    {
+        temp = current;
+        current = current->next;
+        free(temp);
+    }
 }
 
 // Main function to handle command-line arguments and call the appropriate functions
@@ -505,18 +460,13 @@ int main(int argc, char *argv[])
     // Loading Section
     // -----------------------------------------------------------
 
-    // Load trace events
-    // TraceEvent trace[MAX_EVENTS];
-    // int event_count = 0;
-    // load_trace(argv[1], trace, &event_count);
-
     // Load external files
     ExternalFile external_files[MAX_EXTERNAL_FILES];
     int external_file_count = 0;
     load_external_files(argv[2], external_files, &external_file_count);
 
     // Load vector table
-    int vector_table[VECTOR_TABLE_SIZE]; // Array to hold vector table
+    int vector_table[VECTOR_TABLE_SIZE];
     load_vector_table(argv[3], vector_table);
 
     // -----------------------------------------------------------
@@ -524,7 +474,7 @@ int main(int argc, char *argv[])
     // -----------------------------------------------------------
 
     // Initialize memory partitions
-    MemoryPartition partitions[MAX_PARTITIONS] = {{1, 40, "free"}, {2, 25, "free"}, {3, 15, "free"}, {4, 10, "free"}, {5, 8, "free"}, {6, 2, "init"}};
+    MemoryPartition partitions[MAX_PARTITIONS] = {{1, 40, "free"}, {2, 25, "free"}, {3, 15, "free"}, {4, 10, "free"}, {5, 8, "free"}, {6, 2, "free"}};
 
     // Initialize PCB doubly linked list with the init process
     PCB pcb_table;
@@ -534,11 +484,10 @@ int main(int argc, char *argv[])
     // Simulation Section
     // -----------------------------------------------------------
     // printf("Usage: %s <trace_file> <external_files> <vector_table_file> <output_file>\n", argv[0]);
-
     uint16_t current_time = 0;
-    run_fork(NULL, &current_time, 0, &current_process);
-
-    run_exec(argv[1], vector_table, argv[4], external_files, external_file_count, partitions, &current_process, &current_time, 0);
+    run_fork(&current_process);
+    run_exec(argv[1], vector_table, argv[4], external_files, external_file_count, partitions, &current_process, &current_time);
+    free_pcb_list(&pcb_table); // free the PCB linked list
 
     // done
 
@@ -572,17 +521,6 @@ int main(int argc, char *argv[])
         }
 
         printf("\n\tGoodbye %s!\n\n", argv[1]);
-    }
-
-    // Free the PCB linked list
-
-    PCB *temp;
-    PCB *current = &pcb_table;
-    while (current != NULL)
-    {
-        temp = current;
-        current = current->next;
-        free(temp);
     }
 
     return 0;
