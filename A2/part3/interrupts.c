@@ -45,11 +45,12 @@ void run_fork(PCB **current_process)
 }
 
 // function to handle the exec event
-void run_exec(const char *program_name, const int *vector_table, FILE *file, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time)
+void run_exec(const char *program_name, const int *vector_table, FILE *file, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time, uint16_t duration)
 {
+    bool is_init = (*current_process)->pid == 11;
     int program_size = -1;
     // Check if the current process is not the FIRST call to exec() (init process)
-    if ((*current_process)->pid != 0)
+    if (!(is_init))
     {
         // 1. Find the size of the program from the external files
         for (int i = 0; i < external_file_count; i++)
@@ -92,32 +93,51 @@ void run_exec(const char *program_name, const int *vector_table, FILE *file, Ext
         return;
     }
 
+    // Check if the current process is not the FIRST call to exec() (init process)
+    // now that we have all the information we can start the fprintf process
+    if ((!is_init))
+    {
+
+        // Random values for EXEC events THAT match the duration of the event.
+        uint16_t a = rand() % (duration + 1);         // load program into memory
+        uint16_t b = rand() % (duration - a + 1);     // find partition
+        uint16_t c = rand() % (duration - a - b + 1); // mark partition as occupied
+        uint16_t d = duration - a - b - c;            // update PCB with new information
+
+        fprintf(file, "%hu, %d, EXEC: load %s of size %dMb\n", *current_time, a, program_name, program_size);
+        *current_time += a;
+        fprintf(file, "%hu, %d, found partition %hu with %huMb of space\n", *current_time, b, candidate_partition->partition_number, program_size);
+        *current_time += b;
+        fprintf(file, "%hu, %d, partition %hu marked as occupied\n", *current_time, c, candidate_partition->partition_number);
+        *current_time += c;
+        fprintf(file, "%hu, %d, updating PCB with new information\n", *current_time, d);
+        *current_time += d;
+        fprintf(file, "%hu, 1, scheduler called\n", *current_time);
+        *current_time += 1;
+        fprintf(file, "%hu, 1, IRET\n", *current_time);
+
+        PCB *pcb_table = *current_process;
+        while (pcb_table->parent != NULL) // iterate through the current process's parent to get the pcb table
+        {
+            pcb_table = pcb_table->parent;
+        }
+        save_system_status(*current_time, pcb_table);
+
+        *current_time += 1;
+    }
+
     // 3. Mark the partition as occupied with the program name
     strcpy(candidate_partition->code, program_name);
+
     // 4. Update the PCB with the new information
     (*current_process)->partition_number = candidate_partition->partition_number;
-    strcpy((*current_process)->program_name, program_name);
+    strcpy((*current_process)->program_name, (is_init) ? "init" : program_name);
     (*current_process)->program_size = program_size;
-
-    // FPRINTING TO FILE TODO
-
     // DEBUG
 
     // 5. Load the trace file for the program
     TraceEvent trace_events[MAX_EVENTS];
     int event_count = 0;
-
-    // check if null
-    if (program_name == NULL)
-    {
-        printf("Error: Program name is NULL\n");
-        return;
-    }
-    if (trace_events == NULL)
-    {
-        printf("Error: Trace events is NULL\n");
-        return;
-    }
 
     load_trace(program_name, trace_events, &event_count);
 
@@ -128,23 +148,41 @@ void run_exec(const char *program_name, const int *vector_table, FILE *file, Ext
 // Function to handle the system status
 void save_system_status(uint16_t current_time, PCB *pcb_table)
 {
-    FILE *status_file = fopen("system_status.txt", "w");
+    static int first_run = 1;
+    FILE *status_file;
+
+    if (first_run)
+    {
+        status_file = fopen("system_status.txt", "w");
+        first_run = 0;
+    }
+    else
+    {
+        status_file = fopen("system_status.txt", "a");
+    }
+
     if (!status_file)
     {
         printf("Error: Cannot open system_status.txt for writing\n");
         return;
     }
 
-    fprintf(status_file, "Current simulated time: %hu\n", current_time);
-    fprintf(status_file, "PCB Table:\n");
-    fprintf(status_file, "PID | Program Name | Partition | Size\n");
+    fprintf(status_file, "!----------------------------------------------------------!\n");
+    fprintf(status_file, "Save Time: %hu ms\n", current_time);
+    fprintf(status_file, "+-----------------------------------------------+\n");
+    fprintf(status_file, "| PID  | Program Name | Partition Number | Size |\n");
+    fprintf(status_file, "+-----------------------------------------------+\n");
 
     PCB *current = pcb_table;
+    current = current->next;
     while (current != NULL)
     {
-        fprintf(status_file, "%d | %s | %d | %d\n", current->pid, current->program_name, current->partition_number, current->program_size);
+        fprintf(status_file, "| %-4hu | %-12s | %-16hu | %-4hu |\n", current->pid, current->program_name, current->partition_number, current->program_size);
         current = current->next;
     }
+
+    fprintf(status_file, "+-----------------------------------------------+\n");
+    fprintf(status_file, "!----------------------------------------------------------!\n");
 
     fclose(status_file);
 }
@@ -189,11 +227,16 @@ void load_external_files(const char *filename, ExternalFile *external_files, int
 // Function to load trace events from a file
 void load_trace(const char *filename, TraceEvent *trace, int *event_count)
 {
+    // check if filename has a .txt extension
+    bool trap = (strstr(filename, ".txt") == (filename + strlen(filename) - 4));
 
-    FILE *file = fopen(filename, "r");
+    char new_filename[20];
+    strcpy(new_filename, filename);
+    strcat(new_filename, ".txt");
+    FILE *file = (trap) ? fopen(filename, "r") : fopen(new_filename, "r");
     if (!file)
     {
-        printf("Error: Cannot open file %s\n", filename);
+        printf("Error: Cannot open file %s\n", (trap) ? filename : new_filename);
         exit(1);
     }
 
@@ -284,7 +327,7 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
 
     PCB *pcb_table = current_process;
     // iterare through the current process's parent to get the pcb table
-    while (pcb_table->parent != NULL && strcmp(pcb_table->program_name, "init") != 0)
+    while (pcb_table->parent != NULL)
     {
         pcb_table = pcb_table->parent;
     }
@@ -333,9 +376,8 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             fprintf(file, "%d, %d, check for errors\n", *current_time, c);
             *current_time += c;
             fprintf(file, "%d, 1, IRET\n", *current_time);
-            *current_time += 1;
-
             save_system_status(*current_time, pcb_table);
+            *current_time += 1;
         }
         else if (strcmp(trace[i].type, "END_IO") == 0) // Check if the event is an END_IO event
         {
@@ -354,9 +396,8 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             fprintf(file, "%d, %d, END_IO\n", *current_time, trace[i].duration);
             *current_time += trace[i].duration;
             fprintf(file, "%d, 1, IRET\n", *current_time);
-            *current_time += 1;
-
             save_system_status(*current_time, pcb_table);
+            *current_time += 1;
         }
         else if (strcmp(trace[i].type, "FORK") == 0) // Check if the event is a FORK event
         {
@@ -378,21 +419,13 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             fprintf(file, "%d, %d, scheduler called\n", *current_time, b);
             *current_time += b;
             fprintf(file, "%d, 1, IRET\n", *current_time);
+            save_system_status(*current_time, pcb_table);
             *current_time += 1;
 
             run_fork(&current_process);
-            save_system_status(*current_time, pcb_table);
         }
         else if (strcmp(trace[i].type, "EXEC") == 0) // Check if the event is an EXEC event
         {
-            run_exec(trace[i].program_name, vector_table, file, external_files, external_file_count, partitions, &current_process, current_time);
-
-            // Random values for EXEC events THAT match the duration of the event.
-            int duration = trace[i].duration;
-            int a = rand() % (duration + 1);         // load program into memory
-            int b = rand() % (duration - a + 1);     // find partition
-            int c = rand() % (duration - a - b + 1); // mark partition as occupied
-            int d = duration - a - b - c;            // update PCB with new information
 
             fprintf(file, "%hu, 1, switch to kernel mode\n", *current_time);
             *current_time += 1;
@@ -403,37 +436,18 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             *current_time += 1;
             fprintf(file, "%hu, 1, load address 0X%04X into the PC\n", *current_time, vector_table[trace[i].vector]);
             *current_time += 1;
-
-            // Load the program into memory
-            fprintf(file, "%hu, %d, EXEC: load %s of size %dMb\n", *current_time, a, trace[i].program_name, current_process->program_size);
-            *current_time += a;
-            // Find the best fit partition for the program
-            fprintf(file, "%hu, %d, found partition %hu with %huMb of space\n", *current_time, b, current_process->partition_number, current_process->program_size);
-            *current_time += b;
-            // Update the PCB with the new information
-            fprintf(file, "%hu, %d, partition %hu marked as occupied\n", *current_time, c, current_process->partition_number);
-            *current_time += c;
-
-            fprintf(file, "%hu, %d, updating PCB with new information\n", *current_time, d);
-            *current_time += d;
-
-            fprintf(file, "%hu, 1, scheduler called\n", *current_time);
-            *current_time += 1;
-            fprintf(file, "%hu, 1, IRET\n", *current_time);
-            *current_time += 1;
-
-            save_system_status(*current_time, pcb_table);
+            run_exec(trace[i].program_name, vector_table, file, external_files, external_file_count, partitions, &current_process, current_time, trace[i].duration);
         }
 }
 
 // Function to initialize a PCB
 PCB *init_pcb(PCB *pcb)
 {
-    pcb->pid = -1; // because we will fork and the init process will have a pid of 0
+    pcb->pid = 10; // because we will fork and the init process will have a pid of 11, even tho i think init should start at 0..
     pcb->cpu_time = 0;
     pcb->io_time = 0;
     pcb->remaining_cpu_time = 0;
-    pcb->partition_number = 0; // exec() will assign to partition 6
+    pcb->partition_number = 6; // exec() will assign to partition 6 but just for system status to show the init process
     strcpy(pcb->program_name, "init");
     pcb->program_size = 1;
     pcb->parent = NULL;
@@ -498,8 +512,8 @@ int main(int argc, char *argv[])
     }
 
     // Initialize PCB doubly linked list with the init process
-    PCB pcb_table;
-    PCB *current_process = init_pcb(&pcb_table);
+    PCB pcb_head;
+    PCB *current_process = init_pcb(&pcb_head);
 
     // Initialize the current time
     uint16_t current_time = 0;
@@ -509,14 +523,15 @@ int main(int argc, char *argv[])
     // -----------------------------------------------------------
 
     run_fork(&current_process);
-    run_exec(argv[1], vector_table, file, external_files, external_file_count, partitions, &current_process, &current_time);
+    save_system_status(current_time, &pcb_head);
+    run_exec(argv[1], vector_table, file, external_files, external_file_count, partitions, &current_process, &current_time, 0);
 
     // -----------------------------------------------------------
     // Cleanup Section
     // -----------------------------------------------------------
     printf("Simulation complete\n");
-    fclose(file);                  // Close the output file
-    free_pcb_list(pcb_table.next); // free the PCB linked list
+    fclose(file);                 // Close the output file
+    free_pcb_list(pcb_head.next); // free the PCB linked list
 
     // -----------------------------------------------------------
     // Debugging Section

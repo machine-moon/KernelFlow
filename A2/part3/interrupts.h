@@ -51,7 +51,7 @@ typedef struct
 // -----------------------------------------------------------
 
 void run_fork(PCB **current_process);
-void run_exec(const char *program_name, const int *vector_table, FILE *file, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time);
+void run_exec(const char *program_name, const int *vector_table, FILE *file, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time, uint16_t duration);
 
 // -----------------------------------------------------------
 
