@@ -11,20 +11,22 @@
 //  open file once and close once (exec)
 //  check if the file is open before writing to it
 //  fix fork/exec fprintf
+// fix FILE streams and fprintf and passing streams properly
+// uint16_t instead of unsigned short int
 
 // function to handle the fork event
-void run_fork(FILE *file, int *current_time, int duration, PCB **current_process)
+void run_fork(FILE *file, unsigned int *current_time, int duration, PCB **current_process)
 {
-    if (file != NULL) // FIX LATER, THIS IS A TEMPORARY FIX
+    /*if (file != NULL)         // do we even need this? handle in process_trace
     {
         // we need file, current_time, duration here.
         fprintf(file, "%d, 1, switch to kernel mode\n", *current_time);
         (*current_time) += 1;
         fprintf(file, "%d, 3, context saved\n", *current_time);
         (*current_time) += 3;
-        fprintf(file, "%d, 1, find vector 2 in memory position 0x%04X\n", *current_time, 2 * 2);
+        fprintf(file, "%d, 1, find vector 2 in memory position 0x%04X\n", *current_time, (unsigned int)(2 * 2));
         (*current_time) += 1;
-        fprintf(file, "%d, 1, load address 0X%04X into the PC\n", *current_time);
+        fprintf(file, "%d, 1, load address 0X%04X into the PC\n", *current_time,);
         (*current_time) += 1;
         fprintf(file, "%d, %d, FORK: copy parent PCB to child PCB\n", *current_time, duration);
         (*current_time) += duration;
@@ -32,7 +34,7 @@ void run_fork(FILE *file, int *current_time, int duration, PCB **current_process
         (*current_time) += 1;
         fprintf(file, "%d, 1, IRET\n", *current_time);
         (*current_time) += 1;
-    }
+    }*/
 
     PCB *new_process = (PCB *)malloc(sizeof(PCB));
     assert(new_process != NULL);
@@ -56,7 +58,7 @@ void run_fork(FILE *file, int *current_time, int duration, PCB **current_process
 }
 
 // function to handle the exec event
-void run_exec(const char *program_name, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, int *current_time, int duration)
+void run_exec(const char *program_name, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, unsigned int *current_time, int duration)
 {
     // Check if the current process is not the init process
     if (strcmp((*current_process)->program_name, "init") != 0)
@@ -80,7 +82,7 @@ void run_exec(const char *program_name, const int *vector_table, const char *out
 
         // 2. Find the best fit memory partition for the program
         MemoryPartition *best_fit_partition = NULL;
-        for (int i = 0; i < sizeof(memory_partitions) / sizeof(memory_partitions[0]); i++)
+        for (int i = 0; i < MAX_PARTITIONS; i++)
         {
             if (strcmp(memory_partitions[i].code, "free") == 0 && memory_partitions[i].size >= program_size)
             {
@@ -515,7 +517,7 @@ int main(int argc, char *argv[])
     // -----------------------------------------------------------
 
     // Initialize memory partitions
-    MemoryPartition partitions[] = {{1, 40, "free"}, {2, 25, "free"}, {3, 15, "free"}, {4, 10, "free"}, {5, 8, "free"}, {6, 2, "init"}};
+    MemoryPartition partitions[MAX_PARTITIONS] = {{1, 40, "free"}, {2, 25, "free"}, {3, 15, "free"}, {4, 10, "free"}, {5, 8, "free"}, {6, 2, "init"}};
 
     // Initialize PCB doubly linked list with the init process
     PCB pcb_table;
@@ -526,10 +528,10 @@ int main(int argc, char *argv[])
     // -----------------------------------------------------------
     // printf("Usage: %s <trace_file> <external_files> <vector_table_file> <output_file>\n", argv[0]);
 
-    int current_time = 0;
+    unsigned int current_time = 0;
     run_fork(NULL, &current_time, 0, &current_process);
 
-    run_exec(argv[1], vector_table, argv[4], external_files, external_file_count, partitions, &current_process, &current_time, 0);
+    run_exec(argv[1], vector_table, argv[4], external_files, external_file_count, partitions, sizeof(partitions) / sizeof(partitions[0]), &current_process, &current_time, 0);
 
     // done
 

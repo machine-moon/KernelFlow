@@ -3,12 +3,12 @@
 
 // configurations
 #define MAX_EVENTS 300
-#define MAX_PROCESSES 5 // doesnt account for the init process nor for child processes
+#define MAX_PARTITIONS 5 // 0-5 is 6 partitions
 #define MAX_EXTERNAL_FILES 100
 
 #define VECTOR_TABLE_SIZE 256
 #define DEBUG_MODE 0 // used for debugging at the end of main.c
-
+#include <stdio.h>
 typedef struct
 {
     char type[10];         // CPU or SYSCALL or END_IO, FORK, EXEC
@@ -24,7 +24,8 @@ typedef struct
     char code[20]; // "free", "init", or program name
 } MemoryPartition;
 
-typedef struct
+// struct PCB;
+typedef struct PCB
 {
     unsigned int pid;
     unsigned int cpu_time;
@@ -43,12 +44,12 @@ typedef struct
     unsigned int size;
 } ExternalFile;
 // -----------------------------------------------------------
-void run_fork(FILE *file, int *current_time, int duration, PCB **current_process);
-void run_exec(FILE *file, int *current_time, const char *program_name, ExternalFile *external_files, int external_file_count, MemoryPartition *partitions, PCB *pcb_table, PCB **current_process);
+void run_fork(FILE *file, unsigned int *current_time, int duration, PCB **current_process);
+void run_exec(const char *program_name, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, unsigned int *current_time, int duration);
 // -----------------------------------------------------------
 PCB *init_pcb(PCB *pcb);
 
-void save_system_status(int current_time, PCB *pcb_table);
+void save_system_status(unsigned int current_time, PCB *pcb_table);
 
 void load_external_files(const char *filename, ExternalFile *external_files, int *external_file_count);
 // -----------------------------------------------------------
