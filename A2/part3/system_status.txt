@@ -1,0 +1,6 @@
+Current simulated time: 400
+PCB Table:
+PID | Program Name | Partition | Size
+65535 | init | 0 | 1
+0 | trace.txt | 6 | 1
+1 | program1 | 4 | 10

@@ -45,7 +45,7 @@ void run_fork(PCB **current_process)
 }
 
 // function to handle the exec event
-void run_exec(const char *program_name, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time)
+void run_exec(const char *program_name, const int *vector_table, FILE *file, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time)
 {
     int program_size = -1;
     // Check if the current process is not the FIRST call to exec() (init process)
@@ -106,10 +106,23 @@ void run_exec(const char *program_name, const int *vector_table, const char *out
     // 5. Load the trace file for the program
     TraceEvent trace_events[MAX_EVENTS];
     int event_count = 0;
+
+    // check if null
+    if (program_name == NULL)
+    {
+        printf("Error: Program name is NULL\n");
+        return;
+    }
+    if (trace_events == NULL)
+    {
+        printf("Error: Trace events is NULL\n");
+        return;
+    }
+
     load_trace(program_name, trace_events, &event_count);
 
     // 6. Call process_trace to run the process
-    process_trace(trace_events, event_count, vector_table, output_filename, external_files, external_file_count, memory_partitions, *current_process, current_time);
+    process_trace(trace_events, event_count, vector_table, file, external_files, external_file_count, memory_partitions, *current_process, current_time);
 }
 
 // Function to handle the system status
@@ -155,7 +168,7 @@ void load_external_files(const char *filename, ExternalFile *external_files, int
         ExternalFile current_file; // Initialize the current external file
 
         // Parse the line into the current external file
-        if (sscanf(line, "%s %hu", current_file.program_name, &current_file.size) == 2)
+        if (sscanf(line, "%[^,], %hu", current_file.program_name, &current_file.size) == 2)
         {
             // Debug print to check the parsed external file
             // printf("Parsed: Name=%s, Size=%d\n", current_file.program_name, current_file.size);
@@ -176,7 +189,8 @@ void load_external_files(const char *filename, ExternalFile *external_files, int
 // Function to load trace events from a file
 void load_trace(const char *filename, TraceEvent *trace, int *event_count)
 {
-    FILE *file = fopen(filename, "r"); // Open file for reading
+
+    FILE *file = fopen(filename, "r");
     if (!file)
     {
         printf("Error: Cannot open file %s\n", filename);
@@ -211,7 +225,7 @@ void load_trace(const char *filename, TraceEvent *trace, int *event_count)
             strcpy(current_event.type, "FORK");
             current_event.vector = 2; // default vector is 2
         }
-        else if (sscanf(line, "EXEC %s, %hu", current_event.program_name, &current_event.duration) == 2)
+        else if (sscanf(line, "EXEC %[^,], %hu", current_event.program_name, &current_event.duration) == 2)
         {
             strcpy(current_event.type, "EXEC");
             current_event.vector = 3; // default vector is 3
@@ -267,13 +281,13 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
         printf("Error: Cannot open output file\n");
         exit(1);
     }
+
     PCB *pcb_table = current_process;
     // iterare through the current process's parent to get the pcb table
     while (pcb_table->parent != NULL && strcmp(pcb_table->program_name, "init") != 0)
     {
         pcb_table = pcb_table->parent;
     }
-    
 
     // MemoryPartition *current_partition = partitions; for exec
 
@@ -371,7 +385,7 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
         }
         else if (strcmp(trace[i].type, "EXEC") == 0) // Check if the event is an EXEC event
         {
-            run_exec(trace[i].program_name, vector_table, output_filename, external_files, external_file_count, partitions, &current_process, current_time);
+            run_exec(trace[i].program_name, vector_table, file, external_files, external_file_count, partitions, &current_process, current_time);
 
             // Random values for EXEC events THAT match the duration of the event.
             int duration = trace[i].duration;
@@ -410,7 +424,6 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
 
             save_system_status(*current_time, pcb_table);
         }
-
 }
 
 // Function to initialize a PCB
@@ -476,23 +489,38 @@ int main(int argc, char *argv[])
     // Initialize memory partitions
     MemoryPartition partitions[MAX_PARTITIONS] = {{1, 40, "free"}, {2, 25, "free"}, {3, 15, "free"}, {4, 10, "free"}, {5, 8, "free"}, {6, 2, "free"}};
 
+    // Open the output file
+    FILE *file = fopen(argv[4], "w");
+    if (!file)
+    {
+        printf("Error: Cannot open output file %s\n", argv[4]);
+        return 1;
+    }
+
     // Initialize PCB doubly linked list with the init process
     PCB pcb_table;
     PCB *current_process = init_pcb(&pcb_table);
 
+    // Initialize the current time
+    uint16_t current_time = 0;
+
     // -----------------------------------------------------------
     // Simulation Section
     // -----------------------------------------------------------
-    // printf("Usage: %s <trace_file> <external_files> <vector_table_file> <output_file>\n", argv[0]);
-    uint16_t current_time = 0;
+
     run_fork(&current_process);
-    run_exec(argv[1], vector_table, argv[4], external_files, external_file_count, partitions, &current_process, &current_time);
-    free_pcb_list(&pcb_table); // free the PCB linked list
+    run_exec(argv[1], vector_table, file, external_files, external_file_count, partitions, &current_process, &current_time);
 
-    // done
+    // -----------------------------------------------------------
+    // Cleanup Section
+    // -----------------------------------------------------------
+    printf("Simulation complete\n");
+    fclose(file);                  // Close the output file
+    free_pcb_list(pcb_table.next); // free the PCB linked list
 
-    // debug info
-    // check DEBUG_MODE in interrupts.h :)
+    // -----------------------------------------------------------
+    // Debugging Section
+    // -----------------------------------------------------------
     if (DEBUG_MODE)
     {
         // Print the output trace
