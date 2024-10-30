@@ -5,6 +5,12 @@
 #include <time.h>
 #include <stdbool.h>
 #include <assert.h>
+// TODO
+//  add more asserts
+//  current time pointer
+//  open file once and close once (exec)
+//  check if the file is open before writing to it
+//  fix fork/exec fprintf
 
 // function to handle the fork event
 void run_fork(FILE *file, int *current_time, int duration, PCB **current_process)
@@ -18,7 +24,7 @@ void run_fork(FILE *file, int *current_time, int duration, PCB **current_process
         (*current_time) += 3;
         fprintf(file, "%d, 1, find vector 2 in memory position 0x%04X\n", *current_time, 2 * 2);
         (*current_time) += 1;
-        fprintf(file, "%d, 1, load address 0X%04X into the PC\n", *current_time, 0x0000);
+        fprintf(file, "%d, 1, load address 0X%04X into the PC\n", *current_time);
         (*current_time) += 1;
         fprintf(file, "%d, %d, FORK: copy parent PCB to child PCB\n", *current_time, duration);
         (*current_time) += duration;
@@ -31,7 +37,7 @@ void run_fork(FILE *file, int *current_time, int duration, PCB **current_process
     PCB *new_process = (PCB *)malloc(sizeof(PCB));
     assert(new_process != NULL);
 
-    *new_process = **current_process; // copy the content of the current process to the new process
+    memcpy(new_process, *current_process, sizeof(PCB)); // copy the content of the current process to the new process
 
     new_process->pid = (*current_process)->pid + 1;
 
@@ -107,8 +113,9 @@ void run_exec(const char *program_name, const int *vector_table, const char *out
     load_trace(program_name, trace_events, &event_count);
 
     // 6. Call process_trace to run the process
-    process_trace(trace_events, event_count, vector_table, output_filename, external_files, external_file_count, memory_partitions, *current_process);
+    process_trace(trace_events, event_count, vector_table, output_filename, external_files, external_file_count, memory_partitions, *current_process, current_time);
 }
+
 // Function to handle the system status
 void save_system_status(int current_time, PCB *pcb_table)
 {
@@ -257,10 +264,14 @@ void load_vector_table(const char *filename, int *vector_table)
 }
 
 // Function to process the trace and log the events
-void process_trace(TraceEvent *trace, int event_count, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *partitions, PCB *pcb_table)
+void process_trace(TraceEvent *trace, int event_count, const int *vector_table, const char *output_filename, ExternalFile *external_files, int external_file_count, MemoryPartition *partitions, PCB *current_process, int *current_time)
 {
-    PCB *current_process = pcb_table;
-    MemoryPartition *current_partition = partitions;
+    PCB *pcb_table;
+    // iterare through the current process's parent to get the pcb table
+    while (current_process->parent != NULL && strcmp(current_process->program_name, "init") != 0)
+    {
+        current_process = current_process->parent;
+    }
     FILE *file = fopen(output_filename, "w");
     if (!file)
     {
@@ -268,7 +279,9 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
         exit(1);
     }
 
-    int current_time = 0;
+    MemoryPartition *current_partition = partitions;
+
+    int current_time = *current_time;
     bool which_syscall = false; // Used to alternate between the two SYSCALL events
 
     // Loop through each event in the trace
@@ -445,6 +458,8 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
             save_system_status(current_time, pcb_table);
         }
 
+    // update the current time
+    *current_time = current_time;
     fclose(file);
 }
 
@@ -509,10 +524,10 @@ int main(int argc, char *argv[])
     // -----------------------------------------------------------
     // Simulation Section
     // -----------------------------------------------------------
-    // process_trace(trace, event_count, vector_table, argv[4], external_files, external_file_count, partitions, pcb_table);
+    // printf("Usage: %s <trace_file> <external_files> <vector_table_file> <output_file>\n", argv[0]);
 
-    run_fork(NULL, NULL, 0, &current_process);
     int current_time = 0;
+    run_fork(NULL, &current_time, 0, &current_process);
 
     run_exec(argv[1], vector_table, argv[4], external_files, external_file_count, partitions, &current_process, &current_time, 0);
 
