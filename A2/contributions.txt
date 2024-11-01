@@ -1,8 +1,7 @@
 Contributions:
 
 Part 1 - Concepts: Completed by Mithushan Ravichandramohan
-Part 2 - Design: Completed by Tarek Ibrahim
+Part 2 - Concurrent Processes in Unix: Completed by Tarek Ibrahim
+Part 3 - Design and Implementation of an API Simulator: Completed by Tarek Ibrahim
 
-Both team members reviewed the entire assignment and were satisfied with the work achieved.
-
-Overall: successful contribution and completion of SYSC4001 assignment 1.
+Overall: successful contribution and completion of SYSC4001 assignment 2.
