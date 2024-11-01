@@ -1,12 +1,12 @@
 # Interrupt Simulator
 ## Description
-A simple Interrupt Simulator for SYSC-4001 A1.
+A simple Interrupt Simulator for SYSC-4001 A2.
 
 ## Usage
 
 To run the simulator, use the following command:
 ```sh
-./sim <trace_file> <vector_table_file> <output_file>
+./sim <trace_file> <external_files> <vector_table_file> <output_file>
 ```
 
 ## Makefile Instructions
@@ -25,23 +25,12 @@ make test2
 make test3
 make test4
 make test5
-# ... up to test20
 ```
 
 ### Running All Tests
 To run all tests, use:
 ```sh
 make test_all
-```
-
-### Running Tests by Groups
-To run main tests (test1 and test2), use:
-```sh
-make test_main
-```
-To run other tests (test3 to test20), use:
-```sh
-make test_other
 ```
 
 ### Cleaning Up
