@@ -6,8 +6,25 @@
 #include <time.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/sem.h>
 
 #define SHM_KEY 0x1234 // Fixed key for shared memory
+#define SEM_KEY 0x5678 // Fixed key for semaphore
+
+/**
+ * Function to perform semaphore operations.
+ *
+ * @param semid Semaphore ID.
+ * @param sem_op Semaphore operation (-1 for wait, 1 for signal).
+ */
+void sem_op(int semid, int sem_op)
+{
+    struct sembuf sb;
+    sb.sem_num = 0;
+    sb.sem_op = sem_op;
+    sb.sem_flg = 0;
+    semop(semid, &sb, 1);
+}
 
 /**
  * Function to be executed by Process 1.
@@ -16,13 +33,18 @@
  * Terminates if the random number is 0.
  *
  * @param shared_var Pointer to the shared memory variable.
+ * @param semid Semaphore ID.
  */
-void process1(int *shared_var)
+void process1(int *shared_var, int semid)
 {
     srand(time(0)); // Seed the random number generator
     while (1)
     {
         int randNum = rand() % 11;
+
+        // Wait (P operation)
+        sem_op(semid, -1);
+
         *shared_var = randNum;
         printf("I am Process 1, Random Number: %d\n", randNum);
         if (randNum > 5)
@@ -33,6 +55,10 @@ void process1(int *shared_var)
         {
             printf("Low value\n");
         }
+
+        // Signal (V operation)
+        sem_op(semid, 1);
+
         if (randNum == 9)
         {
             pid_t pid = fork();
@@ -86,6 +112,16 @@ int main()
         exit(1);
     }
 
+    int semid = semget(SEM_KEY, 1, 0666 | IPC_CREAT);
+    if (semid < 0)
+    {
+        perror("semget failed");
+        exit(1);
+    }
+
+    // Initialize semaphore to 1
+    semctl(semid, 0, SETVAL, 1);
+
     pid_t pid = fork();
 
     if (pid < 0)
@@ -113,6 +149,7 @@ int main()
          * @param NULL: Ignored.
          */
         shmctl(shmid, IPC_RMID, NULL);
+        semctl(semid, 0, IPC_RMID);
     }
 
     return 0;
