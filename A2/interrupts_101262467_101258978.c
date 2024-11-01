@@ -1,4 +1,4 @@
-#include "interrupts.h"
+#include "interrupts_101262467_101258978.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,12 +157,12 @@ void save_system_status(uint16_t current_time, PCB *pcb_table)
 
     if (first_run)
     {
-        status_file = fopen("system_status.txt", "w");
+        status_file = fopen("system_status_101262467_101258978.txt", "w");
         first_run = 0;
     }
     else
     {
-        status_file = fopen("system_status.txt", "a");
+        status_file = fopen("system_status_101262467_101258978.txt", "a");
     }
 
     if (!status_file)

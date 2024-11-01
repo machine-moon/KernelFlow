@@ -15,7 +15,7 @@
  * Function to perform semaphore operations.
  *
  * @param semid Semaphore ID.
- * @param sem_op Semaphore operation (-1 for wait, 1 for signal).
+ * @param sem_op Semaphore operation
  */
 void sem_op(int semid, int sem_op)
 {
@@ -42,7 +42,7 @@ void process1(int *shared_var, int semid)
     {
         int randNum = rand() % 11;
 
-        // Wait (P operation)
+        // Wait
         sem_op(semid, -1);
 
         *shared_var = randNum;
@@ -56,9 +56,10 @@ void process1(int *shared_var, int semid)
             printf("Low value\n");
         }
 
-        // Signal (V operation)
+        // give control to process 2
         sem_op(semid, 1);
 
+        // compare the random number
         if (randNum == 9)
         {
             pid_t pid = fork();
@@ -87,8 +88,7 @@ int main()
      *
      * @param SHM_KEY: Key to identify the shared memory segment.
      * @param sizeof(int): Size of the shared memory segment in bytes.
-     * @param 0666 | IPC_CREAT: Permissions and flags. 0666 means read and write permissions for
-     * @return: Returns the shared memory ID on success, or -1 on failure.
+     * @param 0666 | IPC_CREAT: Permissions and flags.
      */
     int shmid = shmget(SHM_KEY, sizeof(int), 0666 | IPC_CREAT);
     if (shmid < 0)
@@ -132,15 +132,17 @@ int main()
     else if (pid == 0)
     {
         // pass the shared memory variable to process1
-        process1(shared_var);
+        process1(shared_var, semid);
     }
     else
     {
         // wait for process1 to finish
         wait(NULL);
 
-        // shmdt - Detaches the shared memory segment from the calling process.
-        shmdt(shared_var);
+        /**
+         * @param shared_var: Pointer to the shared memory segment.
+         */
+        shmdt(shared_var); // Detaches
         /**
          * shmctl - Performs control operations on the shared memory segment.
          *
@@ -149,6 +151,10 @@ int main()
          * @param NULL: Ignored.
          */
         shmctl(shmid, IPC_RMID, NULL);
+
+        /**
+         * semctl - Performs control operations on the semaphore.
+         */
         semctl(semid, 0, IPC_RMID);
     }
 

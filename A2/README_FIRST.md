@@ -59,3 +59,17 @@ The Brightspace submission list had typos and updates post-reading week. I align
 
 ### Alternate Method
 To shift initialization responsibility to trace.txt, comment out the fork, save_system_status, and exec lines, uncomment process_trace, along with loading trace, and recompile with `make`. This approach would require an extra file not specified on Brightspace.
+
+
+
+
+system_status will get reset after each test
+how to do a test
+
+based on examples 2 im guessing sizes relative to:
+            time:size
+cpu_size:   100:10
+syscall:    125:15
+fork:       (same as sysc)
+exec:       (same as sysc)
+end_IO:     ~end_IO >= cpu_ratio 
