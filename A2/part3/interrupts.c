@@ -283,9 +283,6 @@ void load_trace(const char *filename, TraceEvent *trace, int *event_count)
             continue; // Skip to the end of the loop
         }
 
-        // Debug print to check the parsed event
-        // printf("Parsed: Type=%s, Vector=%d, Duration=%d\n", current_event.type, current_event.vector, current_event.duration);
-
         // Store the parsed event in the trace array
         trace[*event_count] = current_event;
         (*event_count)++;
@@ -531,11 +528,11 @@ int main(int argc, char *argv[])
     // -----------------------------------------------------------
     // Simulation Section
     // -----------------------------------------------------------
-    process_trace(trace_events, event_count, vector_table, file, external_files, external_file_count, partitions, current_process, &current_time);
+    // process_trace(trace_events, event_count, vector_table, file, external_files, external_file_count, partitions, current_process, &current_time);
 
-    // run_fork(&current_process);
-    // save_system_status(current_time, &pcb_head);
-    // run_exec(argv[1], vector_table, file, external_files, external_file_count, partitions, &current_process, &current_time, 0);
+    run_fork(&current_process);
+    save_system_status(current_time, &pcb_head);
+    run_exec(argv[1], vector_table, file, external_files, external_file_count, partitions, &current_process, &current_time, 0);
 
     // -----------------------------------------------------------
     // Cleanup Section

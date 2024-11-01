@@ -1,2 +1,0 @@
-FORK, 0
-EXEC trace, 0
