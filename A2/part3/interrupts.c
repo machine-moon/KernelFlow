@@ -476,15 +476,9 @@ int main(int argc, char *argv[])
         printf("Usage: %s <trace_file> <external_files> <vector_table_file> <output_file>\n", argv[0]);
         return 1;
     }
-    // -----------------------------------------------------------
-    // Initialization Section
-    // -----------------------------------------------------------
-
-    // Seed
-    srand(time(NULL));
 
     // -----------------------------------------------------------
-    // Loading Section
+    // Loading
     // -----------------------------------------------------------
 
     // Load external files
@@ -497,8 +491,11 @@ int main(int argc, char *argv[])
     load_vector_table(argv[3], vector_table);
 
     // -----------------------------------------------------------
-    // Pre-Processing Section
+    // Initialization
     // -----------------------------------------------------------
+
+    // Seed
+    srand(time(NULL));
 
     // Initialize memory partitions
     MemoryPartition partitions[MAX_PARTITIONS] = {{1, 40, "free"}, {2, 25, "free"}, {3, 15, "free"}, {4, 10, "free"}, {5, 8, "free"}, {6, 2, "free"}};
@@ -519,7 +516,7 @@ int main(int argc, char *argv[])
     uint16_t current_time = 0;
 
     // -----------------------------------------------------------
-    // Simulation Section
+    // Simulation
     // -----------------------------------------------------------
 
     run_fork(&current_process);
