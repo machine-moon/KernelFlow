@@ -132,7 +132,7 @@ int main()
     else if (pid == 0)
     {
         // pass the shared memory variable to process1
-        process1(shared_var, semid);
+        process1(shared_var);
     }
     else
     {

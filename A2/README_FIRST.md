@@ -1,12 +1,12 @@
 # Interrupt Simulator
 ## Description
-A simple Interrupt Simulator for SYSC-4001 A1.
+A simple Interrupt Simulator for SYSC-4001 A2.
 
 ## Usage
 
 To run the simulator, use the following command:
 ```sh
-./sim <trace_file> <vector_table_file> <output_file>
+./sim <trace_file> <external_files> <vector_table_file> <output_file>
 ```
 
 ## Makefile Instructions
@@ -25,7 +25,6 @@ make test2
 make test3
 make test4
 make test5
-# ... up to test20
 ```
 
 ### Running All Tests
@@ -34,23 +33,43 @@ To run all tests, use:
 make test_all
 ```
 
-### Running Tests by Groups
-To run main tests (test1 and test2), use:
-```sh
-make test_main
-```
-To run other tests (test3 to test20), use:
-```sh
-make test_other
-```
-
 ### Cleaning Up
 To remove the executable, object file, and ALL test execution files in, use:
 ```sh
 make clean
 ```
 
-## Notes
-- The `test1` and `test2` scripts are provided as part of the assignment instructions. However, using the `make test_main` and `make test_other` commands is more robust and easier to manage.
-- Ensure you have `make` installed and properly configured.
-- Running tests together may appear to repeat randomness due to fast execution; run tests individually to see true randomness.
+## Assumptions and Design Decisions
+
+### Initial Approach
+Initially, I created a template struct for the init process that would fork itself and start simulating traces. However, Brightspace instructions indicated the trace.txt file should include the init process.
+
+### Challenge with init in trace.txt
+Including init in trace.txt raised questions:
+- How would init self-replicate without creating a loop?
+- Including init in a separate trace file would be ideal but would require an init_trace.txt with only a fork and an exec call, contradicting the required submission list.
+
+### Chosen Design
+My simulator starts with empty memory; exec assigns init to the correct partition and labels it. Tests specify that init should already be running when `./sim` starts, implying it should be forked and executed by the simulator. The ambiguity on whether the simulator or trace.txt should initialize init is trivial in implementation but impacts clarity and design consistency.
+
+### Submission and Testing
+The Brightspace submission list had typos and updates post-reading week. I aligned the design with the testing framework and the instructions as understood. The difference:
+- **Simulator (OS-Handled)**: Calls fork, followed by exec, invoking the simulator.
+- **Trace.txt (User-Handled)**: Calls the simulator directly, which then forks and execs init.
+
+### Alternate Method
+To shift initialization responsibility to trace.txt, comment out the fork, save_system_status, and exec lines, uncomment process_trace, along with loading trace, and recompile with `make`. This approach would require an extra file not specified on Brightspace.
+
+
+
+
+system_status will get reset after each test
+how to do a test
+
+based on examples 2 im guessing sizes relative to:
+            time:size
+cpu_size:   100:10
+syscall:    125:15
+fork:       (same as sysc)
+exec:       (same as sysc)
+end_IO:     ~end_IO >= cpu_ratio 

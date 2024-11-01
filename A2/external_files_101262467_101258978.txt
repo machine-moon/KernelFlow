@@ -1,0 +1,7 @@
+program1, 10
+program2, 15
+program3, 5
+program4, 30
+program5, 5
+program6, 9
+program7, 37

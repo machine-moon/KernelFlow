@@ -1,4 +1,4 @@
-#include "interrupts.h"
+#include "interrupts_101262467_101258978.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,12 +157,12 @@ void save_system_status(uint16_t current_time, PCB *pcb_table)
 
     if (first_run)
     {
-        status_file = fopen("system_status.txt", "w");
+        status_file = fopen("system_status_101262467_101258978.txt", "w");
         first_run = 0;
     }
     else
     {
-        status_file = fopen("system_status.txt", "a");
+        status_file = fopen("system_status_101262467_101258978.txt", "a");
     }
 
     if (!status_file)
@@ -478,15 +478,22 @@ int main(int argc, char *argv[])
         printf("Usage: %s <trace_file> <external_files> <vector_table_file> <output_file>\n", argv[0]);
         return 1;
     }
+    // -----------------------------------------------------------
+    // Initialization Section
+    // -----------------------------------------------------------
+
+    // Seed
+    srand(time(NULL));
 
     // -----------------------------------------------------------
-    // Loading
+    // Loading Section
     // -----------------------------------------------------------
 
+    // ASSUMPION: init is initialized by a trace file
     // Load trace events
-    TraceEvent trace_events[MAX_EVENTS];
-    int event_count = 0;
-    load_trace(argv[1], trace_events, &event_count);
+    // TraceEvent trace_events[MAX_EVENTS];
+    // int event_count = 0;
+    // load_trace(argv[1], trace_events, &event_count);
 
     // Load external files
     ExternalFile external_files[MAX_EXTERNAL_FILES];
@@ -498,11 +505,8 @@ int main(int argc, char *argv[])
     load_vector_table(argv[3], vector_table);
 
     // -----------------------------------------------------------
-    // Initialization
+    // Pre-Processing Section
     // -----------------------------------------------------------
-
-    // Seed
-    srand(time(NULL));
 
     // Initialize memory partitions
     MemoryPartition partitions[MAX_PARTITIONS] = {{1, 40, "free"}, {2, 25, "free"}, {3, 15, "free"}, {4, 10, "free"}, {5, 8, "free"}, {6, 2, "free"}};
@@ -523,8 +527,10 @@ int main(int argc, char *argv[])
     uint16_t current_time = 0;
 
     // -----------------------------------------------------------
-    // Simulation
+    // Simulation Section
     // -----------------------------------------------------------
+
+    // ASSUMPION: init is initialized by a trace file
     // process_trace(trace_events, event_count, vector_table, file, external_files, external_file_count, partitions, current_process, &current_time);
 
     run_fork(&current_process);
@@ -534,7 +540,8 @@ int main(int argc, char *argv[])
     // -----------------------------------------------------------
     // Cleanup Section
     // -----------------------------------------------------------
-    printf("Simulation complete\n");
+
+    // printf("Simulation complete\n");
     fclose(file);                 // Close the output file
     free_pcb_list(pcb_head.next); // free the PCB linked list
 
