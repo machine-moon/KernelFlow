@@ -7,26 +7,16 @@
 #include <assert.h>
 #include <stdint.h>
 
-// TODO
-//  add more asserts
-//  current time pointer
-//  open file once and close once (exec)
-//  check if the file is open before writing to it
-//  fix fork/exec fprintf
-// fix FILE streams and fprintf and passing streams properly
-// uint16_t instead of unsigned short int
-// fix global_time and current_time in process_trace
-// var renames e.g memory_partitions to partitions/main memory / data structures
-// STUDENT NUMBERS ON FILES
-// go over local vars and functions vars types (int, uint16_t, etc) and names
-
 // function to handle the fork event
+/**
+ * @param current_process Pointer to the current process
+ */
 void run_fork(PCB **current_process)
 {
     PCB *new_process = (PCB *)malloc(sizeof(PCB));
     assert(new_process != NULL);
 
-    memcpy(new_process, *current_process, sizeof(PCB)); // duplicate the current process
+    memcpy(new_process, *current_process, sizeof(PCB));
 
     new_process->pid = (*current_process)->pid + 1;
 
@@ -45,11 +35,23 @@ void run_fork(PCB **current_process)
 }
 
 // function to handle the exec event
+/**
+ * @param program_name Name of the program to execute
+ * @param vector_table Pointer to the vector table
+ * @param file Pointer to the output file
+ * @param external_files Pointer to the external files array
+ * @param external_file_count Number of external files
+ * @param memory_partitions Pointer to the memory partitions array
+ * @param current_process Pointer to pointer of the current process
+ * @param current_time Pointer to the current time
+ * @param duration Duration of the event
+ */
 void run_exec(const char *program_name, const int *vector_table, FILE *file, ExternalFile *external_files, int external_file_count, MemoryPartition *memory_partitions, PCB **current_process, uint16_t *current_time, uint16_t duration)
 {
+    // Check if the current process is not the FIRST call to exec() (init process)
     bool is_init = (*current_process)->pid == 11;
     int program_size = -1;
-    // Check if the current process is not the FIRST call to exec() (init process)
+
     if (!(is_init))
     {
         // 1. Find the size of the program from the external files
@@ -125,8 +127,9 @@ void run_exec(const char *program_name, const int *vector_table, FILE *file, Ext
     strcpy((*current_process)->program_name, (is_init) ? "init" : program_name);
     (*current_process)->program_size = program_size;
 
+    // find the head of the pcb table
     PCB *pcb_table = *current_process;
-    while (pcb_table->parent != NULL) // iterate through the current process's parent to get the pcb table
+    while (pcb_table->parent != NULL)
     {
         pcb_table = pcb_table->parent;
     }
@@ -145,13 +148,19 @@ void run_exec(const char *program_name, const int *vector_table, FILE *file, Ext
     // 6. Call process_trace to run the process
     process_trace(trace_events, event_count, vector_table, file, external_files, external_file_count, memory_partitions, *current_process, current_time);
 
-    // once exec is done, current process returns to parent
+    // once execution is done, return execution to parent
     *current_process = (*current_process)->parent;
 }
 
 // Function to handle the system status
+/**
+ * @param current_time Current time
+ * @param pcb_table Pointer to the PCB table
+ */
 void save_system_status(uint16_t current_time, PCB *pcb_table)
 {
+    // this was a problem with the file needing to be opened multiple times and not to be cleared but rather to be cleared on the first run (once per simulation)
+
     static int first_run = 1;
     FILE *status_file;
 
@@ -192,6 +201,11 @@ void save_system_status(uint16_t current_time, PCB *pcb_table)
 }
 
 // Declaration of the load_external_files function
+/**
+ * @param filename Name of the file to load
+ * @param external_files Pointer to the external files array
+ * @param external_file_count Pointer to the external file count
+ */
 void load_external_files(const char *filename, ExternalFile *external_files, int *external_file_count)
 {
     FILE *file = fopen(filename, "r"); // Open file for reading
@@ -207,14 +221,11 @@ void load_external_files(const char *filename, ExternalFile *external_files, int
     // read each line, parse it, store in the external_files array
     while (fgets(line, sizeof(line), file))
     {
-        ExternalFile current_file; // Initialize the current external file
+        ExternalFile current_file;
 
-        // Parse the line into the current external file
+        // Parse
         if (sscanf(line, "%[^,], %hu", current_file.program_name, &current_file.size) == 2)
         {
-            // Debug print to check the parsed external file
-            // printf("Parsed: Name=%s, Size=%d\n", current_file.program_name, current_file.size);
-
             // Store the parsed external file in the external_files array
             external_files[*external_file_count] = current_file;
             (*external_file_count)++;
@@ -225,18 +236,26 @@ void load_external_files(const char *filename, ExternalFile *external_files, int
         }
     }
 
-    fclose(file); // Close the external files file
+    fclose(file);
 }
 
 // Function to load trace events from a file
+/**
+ * @param filename Name of the file to load
+ * @param trace Pointer to the trace array
+ * @param event_count Pointer to the event count
+ */
 void load_trace(const char *filename, TraceEvent *trace, int *event_count)
 {
-    // check if filename has a .txt extension
+    // check if filename has a .txt extension (trap)
     bool trap = (strstr(filename, ".txt") == (filename + strlen(filename) - 4));
 
+    // create a new filename with .txt extension
     char new_filename[20];
     strcpy(new_filename, filename);
     strcat(new_filename, ".txt");
+
+    // open the file for reading
     FILE *file = (trap) ? fopen(filename, "r") : fopen(new_filename, "r");
     if (!file)
     {
@@ -250,11 +269,10 @@ void load_trace(const char *filename, TraceEvent *trace, int *event_count)
     // read each line, parse it, store in the trace array
     while (fgets(line, sizeof(line), file))
     {
-        // printf("Read line: %s", line);
-        TraceEvent current_event;  // Initialize the current trace event
+        TraceEvent current_event;
         current_event.vector = -1; // Default vector to -1
 
-        // Check if the line contains "CPU" OR "END_IO" OR "SYSCALL"
+        // Check if the line contains "CPU" OR "END_IO" OR "SYSCALL" OR "FORK" OR "EXEC"
         if (sscanf(line, "CPU, %hu", &current_event.duration) == 1)
         {
             strcpy(current_event.type, "CPU");
@@ -292,17 +310,22 @@ void load_trace(const char *filename, TraceEvent *trace, int *event_count)
 }
 
 // Function to load the vector table from a file
+/**
+ * @param filename Name of the file to load
+ * @param vector_table Pointer to the vector table array
+ */
 void load_vector_table(const char *filename, int *vector_table)
 {
-    FILE *file = fopen(filename, "r"); // Open file for reading
+    FILE *file = fopen(filename, "r");
     if (!file)
     {
         printf("Error: Cannot open file %s\n", filename);
         exit(1);
     }
-    // buffer
+
     char line[256];
     int index = 0;
+
     // Read each line from the file and parse it into vector table array
     while (fgets(line, sizeof(line), file))
     {
@@ -314,20 +337,36 @@ void load_vector_table(const char *filename, int *vector_table)
             printf("Error: Line format not recognized: %s", line); // Debug print for unrecognized format
         }
     }
-    fclose(file); // Close the vector table file
+    fclose(file);
 }
 
 // Function to process the trace and log the events
+/**
+ * @param trace Pointer to the trace array
+ * @param event_count Number of events in the trace
+ * @param vector_table Pointer to the vector table array
+ * @param file Pointer to the output file
+ * @param external_files Pointer to the external files array
+ * @param external_file_count Number of external files
+ * @param partitions Pointer to the memory partitions array
+ * @param current_process Pointer to the current process
+ * @param current_time Pointer to the current time
+ */
 void process_trace(TraceEvent *trace, int event_count, const int *vector_table, FILE *file, ExternalFile *external_files, int external_file_count, MemoryPartition *partitions, PCB *current_process, uint16_t *current_time)
 {
+    // check if the file is NULL
     if (!file)
     {
         printf("Error: Cannot open output file\n");
         exit(1);
     }
-    bool which_syscall = false; // Used to alternate between the two SYSCALL events (display and transfer data)
+
+    // Used to alternate between the two SYSCALL events (display and transfer data)
+    bool which_syscall = false;
+    // check if were in init (used for ASSUMPTION METHOD 2, can be ignored.)
     bool is_init = (current_process->pid == (11 - 1));
-    PCB *pcb_table = current_process; // iterate through the current process's parent to get the pcb table
+    // iterate through the current process's parent to get the pcb table
+    PCB *pcb_table = current_process;
     while (pcb_table->parent != NULL)
     {
         pcb_table = pcb_table->parent;
@@ -418,11 +457,10 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
                 fprintf(file, "%d, %d, scheduler called\n", *current_time, b);
                 *current_time += b;
                 fprintf(file, "%d, 1, IRET\n", *current_time);
-                // save_system_status(*current_time, pcb_table);
             }
             run_fork(&current_process);
             save_system_status(*current_time, pcb_table);
-            *current_time += 1;
+            *current_time += 1; // insure we take a snapshot of PCB table before we increment time
         }
         else if (strcmp(trace[i].type, "EXEC") == 0) // Check if the event is an EXEC event
         {
@@ -443,13 +481,17 @@ void process_trace(TraceEvent *trace, int event_count, const int *vector_table, 
 }
 
 // Function to initialize a PCB
+/**
+ * @param pcb Pointer to the PCB to initialize
+ * @return Pointer to the initialized PCB
+ */
 PCB *init_pcb(PCB *pcb)
 {
-    pcb->pid = 10; // because we will fork and the init process will have a pid of 11, even tho i think init should start at 0..
+    pcb->pid = 10; // because we will fork and the init process will have a pid of 11, even tho i think init should start at 0...
     pcb->cpu_time = 0;
     pcb->io_time = 0;
     pcb->remaining_cpu_time = 0;
-    pcb->partition_number = 6; // exec() will assign to partition 6 but just for system status to show the init process
+    pcb->partition_number = 6;
     strcpy(pcb->program_name, "init");
     pcb->program_size = 1;
     pcb->parent = NULL;
@@ -458,6 +500,9 @@ PCB *init_pcb(PCB *pcb)
 }
 
 // Function to free the PCB linked list
+/**
+ * @param pcb_table Pointer to the PCB linked list
+ */
 void free_pcb_list(PCB *pcb_table)
 {
     PCB *temp;
@@ -478,19 +523,15 @@ int main(int argc, char *argv[])
         printf("Usage: %s <trace_file> <external_files> <vector_table_file> <output_file>\n", argv[0]);
         return 1;
     }
-    // -----------------------------------------------------------
-    // Initialization Section
-    // -----------------------------------------------------------
 
     // Seed
     srand(time(NULL));
 
     // -----------------------------------------------------------
-    // Loading Section
+    // Loading
     // -----------------------------------------------------------
 
-    // ASSUMPION: init is initialized by a trace file
-    // Load trace events
+    // Load trace events, ASSUMPION: init is initialized by a trace file
     // TraceEvent trace_events[MAX_EVENTS];
     // int event_count = 0;
     // load_trace(argv[1], trace_events, &event_count);
@@ -505,13 +546,13 @@ int main(int argc, char *argv[])
     load_vector_table(argv[3], vector_table);
 
     // -----------------------------------------------------------
-    // Pre-Processing Section
+    // Initialization
     // -----------------------------------------------------------
 
     // Initialize memory partitions
     MemoryPartition partitions[MAX_PARTITIONS] = {{1, 40, "free"}, {2, 25, "free"}, {3, 15, "free"}, {4, 10, "free"}, {5, 8, "free"}, {6, 2, "free"}};
 
-    // Open the output file
+    // Open the output file to stream the output
     FILE *file = fopen(argv[4], "w");
     if (!file)
     {
@@ -519,7 +560,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Initialize PCB doubly linked list with the init process
+    // Initialize PCB (linked list) with the init template
     PCB pcb_head;
     PCB *current_process = init_pcb(&pcb_head);
 
@@ -527,27 +568,31 @@ int main(int argc, char *argv[])
     uint16_t current_time = 0;
 
     // -----------------------------------------------------------
-    // Simulation Section
+    // Simulation
     // -----------------------------------------------------------
 
     // ASSUMPION: init is initialized by a trace file
     // process_trace(trace_events, event_count, vector_table, file, external_files, external_file_count, partitions, current_process, &current_time);
 
+    // Fork the init process
     run_fork(&current_process);
+    // snapshot the pcb table
     save_system_status(current_time, &pcb_head);
+    // run the simulation
     run_exec(argv[1], vector_table, file, external_files, external_file_count, partitions, &current_process, &current_time, 0);
 
     // -----------------------------------------------------------
-    // Cleanup Section
+    // Cleanup
     // -----------------------------------------------------------
 
-    // printf("Simulation complete\n");
+    printf("Simulation complete\n");
     fclose(file);                 // Close the output file
     free_pcb_list(pcb_head.next); // free the PCB linked list
 
     // -----------------------------------------------------------
     // Debugging Section
     // -----------------------------------------------------------
+
     if (DEBUG_MODE)
     {
         // Print the output trace
@@ -577,6 +622,5 @@ int main(int argc, char *argv[])
 
         printf("\n\tGoodbye %s!\n\n", argv[1]);
     }
-
     return 0;
 }
