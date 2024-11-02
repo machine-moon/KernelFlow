@@ -1,2 +1,2 @@
 FORK, 20
-EXEC program1, 60
+EXEC program8, 60
