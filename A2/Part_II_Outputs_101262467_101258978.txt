@@ -1,0 +1,87 @@
+Report on Concurrent Processes in Unix
+
+Introduction
+This report summarizes the implementation of concurrent processes in C/C++ in a Linux environment.
+
+Initial Implementation
+We started by creating two independent processes using the fork() system call. Process 1 displays "I am Process 1" indefinitely, while Process 2 shows "I am Process 2." Delay functions were added to manage output speed, and processes could be terminated using the kill command.
+
+Random Number Generation
+We enhanced the program by incorporating random number generation with the rand() function. Process 1 generates a random number between 0 and 10, indicating whether it’s a "High value" (greater than 5) or a "Low value" (5 or less). Process 2 starts only if Process 1 generates the number 9, adding a layer of control to the execution.
+
+Process Synchronization
+Next, we implemented the wait() system call. Process 1 waits for Process 2 to finish its execution. Process 2 displays its message 10 times before exiting, ensuring both processes terminate gracefully.
+
+Shared Memory
+We introduced shared memory functionality using shmget, shmat, and shmdt. This allows both processes to access a common variable containing the random number. They react to the variable’s value and terminate when it reaches 0.
+
+Semaphore Protection
+To prevent concurrent access issues, we added semaphores with semget, semop, and semctl. This step ensures that only one process accesses shared memory at a time, preventing race conditions.
+
+Conclusion
+Through several enhancements, we created a concurrent application demonstrating the principles of concurrency processes in Unix. 
+
+SAMPLE OUTPUT: 
+
+
+$ ./concurrent_processes 
+I am Process 1, Random Number: 5
+Low value
+I am Process 1, Random Number: 6
+High value
+I am Process 1, Random Number: 1
+Low value
+I am Process 1, Random Number: 4
+Low value
+I am Process 1, Random Number: 5
+Low value
+I am Process 1, Random Number: 9                    
+High value
+I am Process 2, Shared Random Number: 9
+I am Process 1, Random Number: 0
+Low value
+I am Process 2, Shared Random Number: 0
+
+
+$ ./concurrent_processes 
+I am Process 1, Random Number: 8
+High value
+I am Process 1, Random Number: 3
+Low value
+I am Process 1, Random Number: 7
+High value
+I am Process 1, Random Number: 8
+High value
+I am Process 1, Random Number: 1
+Low value
+I am Process 1, Random Number: 2
+Low value
+I am Process 1, Random Number: 7
+High value
+I am Process 1, Random Number: 4
+Low value
+I am Process 1, Random Number: 4
+Low value
+I am Process 1, Random Number: 4
+Low value
+I am Process 1, Random Number: 8
+High value
+I am Process 1, Random Number: 9
+High value
+I am Process 2, Shared Random Number: 9
+I am Process 1, Random Number: 6
+High value
+I am Process 2, Shared Random Number: 6
+I am Process 1, Random Number: 2
+Low value
+I am Process 2, Shared Random Number: 2
+I am Process 1, Random Number: 6
+High value
+I am Process 2, Shared Random Number: 6
+I am Process 1, Random Number: 3
+Low value
+I am Process 2, Shared Random Number: 3
+I am Process 2, Shared Random Number: 3
+I am Process 1, Random Number: 0
+Low value
+I am Process 2, Shared Random Number: 0
